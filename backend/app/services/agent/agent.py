@@ -4,10 +4,10 @@ import asyncio
 import time
 from typing import Iterable, Optional
 
-from ..config import AgentConfig
-from ..schemas import AgentMessage, ChannelEmotion, EmotionState
-from .memory import AgentMemory
+from ...config import AgentConfig
+from ...schemas import AgentMessage, ChannelEmotion, EmotionState
 from .llm import LLMService
+from .memory_adapter import AgentMemory
 from .tts import SynthesizedSpeech, TTSService
 
 

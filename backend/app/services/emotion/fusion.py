@@ -3,8 +3,8 @@ from __future__ import annotations
 import math
 from typing import Dict, Iterable
 
-from ..config import FusionConfig
-from ..schemas import ChannelEmotion, EmotionState
+from ...config import FusionConfig
+from ...schemas import ChannelEmotion, EmotionState
 
 
 class EmotionFusionService:

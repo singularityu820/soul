@@ -6,7 +6,7 @@ from typing import Optional
 
 import httpx
 
-from ..config import TTSProvider, TTSServiceConfig
+from ...config import TTSProvider, TTSServiceConfig
 
 _DETECTION_TIMEOUT = 0.35
 

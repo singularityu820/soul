@@ -6,8 +6,8 @@ import time
 from dataclasses import dataclass
 from typing import Optional
 
-from ..config import FaceEmotionConfig
-from ..schemas import ChannelEmotion
+from ...config import FaceEmotionConfig
+from ...schemas import ChannelEmotion
 
 
 @dataclass(slots=True)

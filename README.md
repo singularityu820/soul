@@ -19,8 +19,12 @@ Multimodal real-time emotion companion that fuses simulated EEG signals and faci
 ```
 backend/
   app/
+    services/
+      agent/         # LLM, TTS, agent orchestration, memory adapter
+      emotion/       # EEG simulator, face tool, fusion pipeline, avatar
+      chat/          # Chat service and websocket emitters
+      realtime/      # WebRTC signaling hub
     memory/          # Modular memory system (manager, types, storage, RAG)
-    services/        # EEG, face, fusion, avatar, agent, pipeline services
     config.py        # Configuration dataclasses
     main.py          # FastAPI entrypoint and routes
     schemas.py       # Shared Pydantic schemas

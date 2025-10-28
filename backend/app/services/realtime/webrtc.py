@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from ..schemas import WebRTCAnswer, WebRTCCandidate, WebRTCOffer
+from ...schemas import WebRTCAnswer, WebRTCCandidate, WebRTCOffer
 
 
 @dataclass(slots=True)

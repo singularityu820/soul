@@ -35,17 +35,17 @@ from .schemas import (
     WebRTCStateOut,
     UserMessageIn,
 )
-from .services.agent import ConversationalAgent
-from .services.avatar import AvatarOrchestrator
-from .services.eeg import EEGEmotionClassifier, EEGStreamTool
-from .services.face import FaceEmotionTool
-from .services.fusion import EmotionFusionService
-from .services.memory import AgentMemory
-from .services.pipeline import EmotionPipeline
-from .services.llm import LLMService
-from .services.tts import TTSService
-from .services.chat import ChatService
-from .services.webrtc import WebRTCSignalHub
+from .services.agent import AgentMemory, ConversationalAgent, LLMService, TTSService
+from .services.chat.service import ChatService
+from .services.emotion import (
+    AvatarOrchestrator,
+    EmotionFusionService,
+    EmotionPipeline,
+    EEGEmotionClassifier,
+    EEGStreamTool,
+    FaceEmotionTool,
+)
+from .services.realtime.webrtc import WebRTCSignalHub
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

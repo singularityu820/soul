@@ -6,7 +6,7 @@ from typing import Dict, Optional
 
 import httpx
 
-from ..config import LLMProvider, LLMServiceConfig
+from ...config import LLMProvider, LLMServiceConfig
 
 _DETECTION_TIMEOUT = 0.35
 

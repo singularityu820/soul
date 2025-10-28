@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Deque, Dict
 
-from ..config import AvatarConfig
-from ..schemas import AvatarPose, EmotionState
+from ...config import AvatarConfig
+from ...schemas import AvatarPose, EmotionState
 
 
 @dataclass(slots=True)
@@ -16,8 +17,6 @@ class AvatarOrchestrator:
     """Maps emotion state into avatar animation directives."""
 
     def __init__(self, config: AvatarConfig | None = None) -> None:
-        from collections import deque
-
         self.config = config or AvatarConfig()
         self._state = AvatarState(history=deque(maxlen=self.config.max_pose_history))
 

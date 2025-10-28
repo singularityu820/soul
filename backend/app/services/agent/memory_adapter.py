@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Iterable, Mapping, Optional, Sequence
 
-from ..config import AgentConfig
-from ..schemas import MemoryRecordOut
-from ..memory import MemoryConfig, MemoryItem, MemoryKind, MemoryManager
+from ...config import AgentConfig
+from ...memory import MemoryConfig, MemoryItem, MemoryKind, MemoryManager
+from ...schemas import MemoryRecordOut
 
 
 class AgentMemory:
@@ -85,6 +85,6 @@ class AgentMemory:
 
     @property
     def rag_pipeline(self):
-        from ..memory.rag.pipeline import RAGPipeline
+        from ...memory.rag.pipeline import RAGPipeline
 
         return RAGPipeline(self.manager)

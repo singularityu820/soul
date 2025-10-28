@@ -10,8 +10,8 @@ from typing import Deque, Dict, Iterable, Tuple
 
 import numpy as np
 
-from ..config import EEGClassifierConfig, EEGStreamConfig
-from ..schemas import ChannelEmotion, EEGWaveform
+from ...config import EEGClassifierConfig, EEGStreamConfig
+from ...schemas import ChannelEmotion, EEGWaveform
 
 
 @dataclass(slots=True)

@@ -4,8 +4,8 @@ import asyncio
 import logging
 from typing import Optional
 
-from ..schemas import AgentMessage, EmotionState, PipelineEvent
-from .agent import ConversationalAgent
+from ...schemas import AgentMessage, EmotionState, PipelineEvent
+from ..agent import ConversationalAgent
 from .avatar import AvatarOrchestrator
 from .eeg import EEGEmotionClassifier, EEGSample, EEGStreamTool
 from .face import FaceEmotionTool

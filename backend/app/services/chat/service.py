@@ -7,15 +7,9 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional
 
-from ..schemas import (
-    AgentMessage,
-    ChatEvent,
-    ChatMessage,
-    ChatThreadOut,
-    EmotionState,
-)
-from .agent import ConversationalAgent
-from .pipeline import EmotionPipeline
+from ...schemas import AgentMessage, ChatEvent, ChatMessage, ChatThreadOut, EmotionState
+from ..agent import ConversationalAgent
+from ..emotion.pipeline import EmotionPipeline
 
 
 @dataclass(slots=True)
