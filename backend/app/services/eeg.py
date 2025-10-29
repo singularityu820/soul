@@ -146,6 +146,7 @@ class EEGEmotionClassifier:
 
         This is heuristic for the simulated classifier and can be adjusted later.
         """
+        
         mapping = {
             "joyful": "happy",
             "calm": "neutral",
