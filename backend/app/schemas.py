@@ -13,7 +13,7 @@ class EEGWaveform(BaseModel):
 
 
 class ChannelEmotion(BaseModel):
-    source: Literal["eeg", "face", "fusion"]
+    source: Literal["eeg", "face", "speech", "fusion"]
     label: str
     confidence: float = Field(ge=0.0, le=1.0)
     mood_score: float = Field(ge=-1.0, le=1.0)

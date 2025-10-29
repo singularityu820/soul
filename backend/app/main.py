@@ -46,6 +46,7 @@ from .services.llm import LLMService
 from .services.tts import TTSService
 from .services.chat import ChatService
 from .services.webrtc import WebRTCSignalHub
+from .services.speech import SpeechEmotionTool  # <-- 1. 已添加导入
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ app.add_middleware(
 eeg_stream = EEGStreamTool(EEGStreamConfig())
 eeg_classifier = EEGEmotionClassifier(EEGClassifierConfig())
 face_tool = FaceEmotionTool(FaceEmotionConfig())
+speech_tool = SpeechEmotionTool()  # <-- 2. 已实例化 speech_tool
 fusion_service = EmotionFusionService(FusionConfig())
 avatar = AvatarOrchestrator(AvatarConfig())
 memory = AgentMemory(AgentConfig())
@@ -88,6 +90,7 @@ pipeline = EmotionPipeline(
     eeg_stream=eeg_stream,
     eeg_classifier=eeg_classifier,
     face_tool=face_tool,
+    speech_tool=speech_tool,  # <-- 3. 已将 speech_tool 注入 pipeline
     fusion=fusion_service,
     avatar=avatar,
     agent=agent,
@@ -376,3 +379,20 @@ async def webrtc_signaling(
         hub.unsubscribe(room_id, queue)
         if websocket.application_state != WebSocketState.DISCONNECTED:
             await websocket.close()
+
+
+if __name__ == "__main__":
+    # When running as a module (python -m app.main) this block will execute
+    # and start a development server. Avoid running the file directly via
+    # Two-way data binding in Vue.js (v-model)    # `python path/to/main.py` because relative imports will fail; instead
+    # run from the `backend` directory with:
+    #   python -m app.main
+    # or use uvicorn directly:
+    #   python -m uvicorn app.main:app --reload --port 8000
+    try:
+        import uvicorn
+
+        uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    except Exception:
+        # If uvicorn isn't available, fall back to a helpful message.
+        print("Start the app with: python -m uvicorn app.main:app --reload --port 8000")

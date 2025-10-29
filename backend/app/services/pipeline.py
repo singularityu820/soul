@@ -9,6 +9,7 @@ from .agent import ConversationalAgent
 from .avatar import AvatarOrchestrator
 from .eeg import EEGEmotionClassifier, EEGSample, EEGStreamTool
 from .face import FaceEmotionTool
+from .speech import SpeechEmotionTool  # <-- 1. 已添加导入
 from .fusion import EmotionFusionService
 
 logger = logging.getLogger(__name__)
@@ -22,6 +23,7 @@ class EmotionPipeline:
         eeg_stream: EEGStreamTool,
         eeg_classifier: EEGEmotionClassifier,
         face_tool: FaceEmotionTool,
+        speech_tool: SpeechEmotionTool,  # <-- 2. 已添加 speech_tool 参数
         fusion: EmotionFusionService,
         avatar: AvatarOrchestrator,
         agent: ConversationalAgent,
@@ -29,6 +31,7 @@ class EmotionPipeline:
         self.eeg_stream = eeg_stream
         self.eeg_classifier = eeg_classifier
         self.face_tool = face_tool
+        self.speech_tool = speech_tool  # <-- 2. 已存储 self.speech_tool
         self.fusion = fusion
         self.avatar = avatar
         self.agent = agent
@@ -80,7 +83,11 @@ class EmotionPipeline:
                 sample: EEGSample = await self.eeg_stream.sample()
                 eeg_channel = await self.eeg_classifier.classify(sample)
                 face_channel = await self.face_tool.analyze()
-                fused = self.fusion.fuse([eeg_channel, face_channel])
+                speech_channel = await self.speech_tool.analyze()  # <-- 3. 已调用 speech_tool
+                
+                # 4. 已将 speech_channel 添加到融合列表
+                fused = self.fusion.fuse([eeg_channel, face_channel, speech_channel])
+                
                 fused_with_wave = fused.model_copy(update={"waveform": sample.waveform})
 
                 avatar_pose = self.avatar.translate(fused_with_wave)

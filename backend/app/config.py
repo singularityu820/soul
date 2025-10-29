@@ -30,7 +30,7 @@ class FaceEmotionConfig:
 @dataclass(slots=True)
 class FusionConfig:
     channel_weights: Dict[str, float] = field(
-        default_factory=lambda: {"eeg": 0.6, "face": 0.4}
+        default_factory=lambda: {"eeg": 0.5, "face": 0.3, "speech": 0.2}
     )
     neutral_bias: float = 0.1
 

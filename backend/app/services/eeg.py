@@ -127,10 +127,30 @@ class EEGEmotionClassifier:
             "notes": "Simulated classification. Replace with real EEG emotion MLP tool.",
         }
 
+        # 映射到 canonical 标签集合（7类）以便与 face/speech 保持一致
+        canonical = self._map_label_to_canonical(label)
+        metadata["original_label"] = label
+
         return ChannelEmotion(
             source="eeg",
-            label=label,
+            label=canonical,
             confidence=confidence,
             mood_score=mood_score,
             metadata=metadata,
         )
+
+    def _map_label_to_canonical(self, label: str) -> str:
+        """
+        Map EEG classifier labels to canonical 7-label set:
+        ["neutral","happy","surprised","sad","angry","disgust","fear"].
+
+        This is heuristic for the simulated classifier and can be adjusted later.
+        """
+        mapping = {
+            "joyful": "happy",
+            "calm": "neutral",
+            "anxious": "fear",
+            "stressed": "angry",
+            "neutral": "neutral",
+        }
+        return mapping.get(label, "neutral")
