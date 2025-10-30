@@ -221,6 +221,7 @@ class FaceEmotionTool:
             mood_score=mood_score,
             metadata=metadata,
         )
+#ceshitijiao
 
     def _simulate_emotion(self) -> ChannelEmotion:
         rng = self._rng
