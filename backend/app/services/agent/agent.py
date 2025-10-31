@@ -101,6 +101,7 @@ class ConversationalAgent:
             llm_provider=self.llm_service.provider.value,
             tts_provider=speech.provider.value if speech else None,
             audio_reference=speech.audio_reference if speech else None,
+            audio_segments=speech.segments if speech else None,
         )
 
     def _build_prompt(self, emotion: EmotionState, voice_style: str, language: str) -> str:

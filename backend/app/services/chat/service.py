@@ -115,6 +115,7 @@ class ChatService:
                 llm_provider=agent_message.llm_provider if agent_message else None,
                 tts_provider=agent_message.tts_provider if agent_message else None,
                 audio_reference=agent_message.audio_reference if agent_message else None,
+                audio_segments=agent_message.audio_segments if agent_message else None,
             )
             self._messages[thread_id].append(message)
             record = self._threads[thread_id]

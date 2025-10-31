@@ -4,13 +4,13 @@ Multimodal real-time emotion companion that fuses simulated EEG signals and faci
 
 ## Features
 
-- **EEG simulator & classifier**: Generates multi-band synthetic EEG waveforms and classifies them with a placeholder MLP hook (ready to be swapped with a real tool/API).
+- **EEG simulator & classifier**: Emits synthetic BCI frames that follow the documented POST payload (serial/page timestamps, sample_size, point_timestamp/point_data, error_data) and derives spectral band features for the placeholder classifier.
 - **Face emotion tool**: Accepts detections through an API endpoint and falls back to a stochastic simulator until a real YOLO-style model is connected.
 - **Emotion fusion**: Combines EEG and face channels into a single affective state with weighted confidence tracking.
 - **Messenger-style UI**: React front-end now mimics a full chat companion with thread list, rich message bubbles, call/screen-share entry points, and emotion-aware context.
 - **Avatar orchestration**: Translates emotion outputs into sprite expressions, poses, and color themes.
 - **Modular memory stack**: Working/episodic/semantic/perceptual memories routed through a unified manager with vector search, graph relations, and RAG-ready document ingestion.
-- **LLM/TTS provider orchestration**: Auto-detects OpenAI, ModelScope, Zhipu AI, vLLM, or Ollama backends (with Azure/Edge/Polly/Coqui/Ollama TTS peers) and falls back to sandbox stubs when credentials are missing.
+- **LLM/TTS provider orchestration**: Auto-detects OpenAI, ModelScope, Zhipu AI, vLLM, or Ollama backends, and now streams GPT-SoVITs TTS requests chunk-by-chunk on punctuation/voice markers (replacing `0.0.0.0` URLs with the configured public base) while falling back to sandbox stubs when credentials are missing.
 - **WebSocket streaming**: Pushes emotion, avatar, and agent events to the UI in real time.
 - **Front-end dashboard**: React UI showing EEG waveforms, channel contributions, agent log, and manual user memory inputs.
 
@@ -73,7 +73,7 @@ The dev server proxies API and WebSocket calls to `http://localhost:8000`. Open 
 
 - **EEG**: Replace `EEGEmotionClassifier` logic with calls into your actual MLP tool/API. The `EEGStreamTool` already exposes a single integration point (`classify`).
 - **Face recognition**: Feed results from a YOLO or other video pipeline to `/ingest/face` (or wire the detector directly into `FaceEmotionTool`).
-- **LLM-driven agent**: The `LLMService` auto-picks a provider via env/endpoint probing; export `LLM_PROVIDER=openai|modelscope|zhipu|vllm|ollama` to override or supply the corresponding API keys/endpoints. Prompts and outputs now also flow into the TTS layer.
+- **LLM-driven agent**: The `LLMService` auto-picks a provider via env/endpoint probing; export `LLM_PROVIDER=openai|modelscope|zhipu|vllm|ollama` to override or supply the corresponding API keys/endpoints. Set `SOVITS_ENDPOINT` (plus optional `SOVITS_PUBLIC_BASE`, `SOVITS_APP_KEY`, `SOVITS_DOWNLOAD_URL`) so chunked GPT-SoVITs calls can stream audio as soon as punctuation/voice markers land in the LLM output.
 - **Avatar rendering**: The front-end `AvatarCanvas` can be swapped with a richer WebGL canvas or a game engine stream that listens to the same WebSocket.
 - Set `TTS_PROVIDER` (azure|edge|polly|coqui|ollama) or rely on auto detection (`AZURE_TTS_KEY`, `EDGE_TTS_KEY`, AWS credentials, or responsive Ollama endpoint).
 
