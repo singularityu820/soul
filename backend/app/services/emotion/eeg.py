@@ -1,91 +1,182 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import random
-import time
 from collections import deque
 from dataclasses import dataclass
-from typing import Deque, Dict, Iterable, Tuple
+from typing import Any, Deque, Dict, List
 
 import numpy as np
 
 from ...config import EEGClassifierConfig, EEGStreamConfig
 from ...schemas import ChannelEmotion, EEGWaveform
 
+logger = logging.getLogger(__name__)
+
+BAND_FREQUENCIES_HZ: Dict[str, float] = {
+    "delta": 2.0,
+    "theta": 6.0,
+    "alpha": 10.0,
+    "beta": 18.0,
+    "gamma": 35.0,
+}
+
+BAND_WEIGHTS: Dict[str, float] = {
+    "delta": 1.0,
+    "theta": 0.8,
+    "alpha": 0.6,
+    "beta": 0.45,
+    "gamma": 0.35,
+}
+
+BAND_RANGES_HZ: Dict[str, tuple[float, float]] = {
+    "delta": (0.5, 4.0),
+    "theta": (4.0, 8.0),
+    "alpha": (8.0, 13.0),
+    "beta": (13.0, 30.0),
+    "gamma": (30.0, 45.0),
+}
+
+ERROR_SENTINEL = "_undefine"
+
+
+@dataclass(slots=True)
+class BCIDataFrame:
+    serial_number: int
+    page_timestamp: float
+    page_time_length: float
+    sample_size: int
+    point_timestamp: List[float]
+    point_data: List[float]
+    error_data: str = ERROR_SENTINEL
+
+    def to_payload(self) -> Dict[str, Any]:
+        return {
+            "serial_number": self.serial_number,
+            "page_timestamp": self.page_timestamp,
+            "page_time_length": self.page_time_length,
+            "sample_size": self.sample_size,
+            "point_timestamp": list(self.point_timestamp),
+            "point_data": list(self.point_data),
+            "error_data": self.error_data,
+        }
+
 
 @dataclass(slots=True)
 class EEGSample:
     waveform: EEGWaveform
     band_energy: Dict[str, float]
+    frame: BCIDataFrame
 
 
 class EEGStreamTool:
-    """Simulated EEG stream producing band-limited waveforms."""
+    """Generates EEG frames that mirror the documented BCI interface payload."""
 
     def __init__(self, config: EEGStreamConfig | None = None) -> None:
         self.config = config or EEGStreamConfig()
-        self._buffers: Dict[str, Deque[float]] = {
-            channel: deque(
-                maxlen=int(
-                    self.config.sample_rate_hz * self.config.waveform_buffer_seconds
-                )
-            )
-            for channel in self.config.channels
-        }
+        buffer_capacity = max(
+            1,
+            int(round(self.config.sample_rate_hz * self.config.waveform_buffer_seconds)),
+        )
+        self._buffer: Deque[float] = deque(maxlen=buffer_capacity)
         self._rng = random.Random()
-        self._phase_offsets: Dict[str, float] = {
-            channel: self._rng.random() * math.tau for channel in self.config.channels
+        self._serial = 0
+        self._last_point_timestamp = 0.0
+        amp_min_raw, amp_max_raw = self.config.amplitude_range
+        self._amp_min = min(abs(amp_min_raw), abs(amp_max_raw))
+        self._amp_max = max(abs(amp_min_raw), abs(amp_max_raw))
+        self._noise_sigma = max(1e-3, (self._amp_max - self._amp_min) * 0.03)
+        self._time_step_ms = 1000.0 / self.config.sample_rate_hz
+        self._band_state: Dict[str, Dict[str, float]] = {
+            band: {
+                "phase": self._rng.random() * math.tau,
+                "amplitude": self._random_amplitude(),
+            }
+            for band in BAND_FREQUENCIES_HZ
         }
 
     async def sample(self) -> EEGSample:
         await asyncio.sleep(self.config.update_interval)
-        samples_per_channel = int(
-            self.config.sample_rate_hz * self.config.update_interval
+        frame = self._simulate_frame()
+        if frame.error_data != ERROR_SENTINEL:
+            logger.warning("EEG frame reported error: %s", frame.error_data)
+        self._buffer.extend(frame.point_data)
+        waveform = self._build_waveform()
+        band_energy = self._compute_band_energy()
+        return EEGSample(waveform=waveform, band_energy=band_energy, frame=frame)
+
+    def _simulate_frame(self) -> BCIDataFrame:
+        sample_count = max(1, int(round(self.config.sample_rate_hz * self.config.update_interval)))
+        timestamps: List[float] = []
+        values: List[float] = []
+        for _ in range(sample_count):
+            self._last_point_timestamp += self._time_step_ms
+            timestamps.append(self._last_point_timestamp)
+            values.append(self._compose_sample())
+        self._serial += 1
+        return BCIDataFrame(
+            serial_number=self._serial,
+            page_timestamp=self._last_point_timestamp,
+            page_time_length=self._time_step_ms * sample_count,
+            sample_size=sample_count,
+            point_timestamp=timestamps,
+            point_data=values,
+            error_data=ERROR_SENTINEL,
         )
-        now = time.time()
-        new_values: Dict[str, Iterable[float]] = {}
-        band_energy: Dict[str, float] = {}
 
-        for channel in self.config.channels:
-            freq = self._channel_frequency(channel)
-            phase = self._phase_offsets[channel]
-            noise_scale = self._channel_noise(channel)
-            values = []
-            for i in range(samples_per_channel):
-                t = now + i / self.config.sample_rate_hz
-                base_wave = math.sin(math.tau * freq * t + phase)
-                mod_wave = math.sin(math.tau * freq * 0.25 * t + phase / 2.0)
-                noise = self._rng.gauss(0.0, noise_scale)
-                amplitude = self._rng.uniform(*self.config.amplitude_range)
-                value = (base_wave + 0.3 * mod_wave) * (amplitude / 2.0) + noise
-                values.append(value)
-                self._buffers[channel].append(value)
-            new_values[channel] = list(values)
-            band_energy[channel] = float(np.mean(np.abs(values)))
+    def _compose_sample(self) -> float:
+        value = 0.0
+        for band, state in self._band_state.items():
+            phase = state["phase"]
+            amplitude = state["amplitude"]
+            weight = BAND_WEIGHTS.get(band, 1.0)
+            value += amplitude * weight * math.sin(phase)
+            state["phase"] = (phase + self._phase_increment(BAND_FREQUENCIES_HZ[band])) % math.tau
+            drift = self._rng.gauss(0.0, (self._amp_max - self._amp_min) * 0.0005)
+            state["amplitude"] = self._clamp_amplitude(amplitude + drift)
+        value += self._rng.gauss(0.0, self._noise_sigma)
+        return value
 
-        waveform = EEGWaveform(
-            channels={k: list(self._buffers[k]) for k in self.config.channels},
+    def _phase_increment(self, frequency_hz: float) -> float:
+        return 2.0 * math.pi * frequency_hz / self.config.sample_rate_hz
+
+    def _random_amplitude(self) -> float:
+        return self._rng.uniform(self._amp_min, self._amp_max)
+
+    def _clamp_amplitude(self, value: float) -> float:
+        return max(self._amp_min, min(self._amp_max, value))
+
+    def _build_waveform(self) -> EEGWaveform:
+        channel_name = self.config.channels[0] if self.config.channels else "signal"
+        return EEGWaveform(
+            channels={channel_name: list(self._buffer)},
             sample_rate_hz=self.config.sample_rate_hz,
         )
-        return EEGSample(waveform=waveform, band_energy=band_energy)
 
-    def _channel_frequency(self, channel: str) -> float:
-        base_map: Dict[str, float] = {
-            "delta": 2.0,
-            "theta": 6.0,
-            "alpha": 10.0,
-            "beta": 18.0,
-            "gamma": 35.0,
-        }
-        return base_map.get(channel, 8.0)
-
-    def _channel_noise(self, channel: str) -> float:
-        if channel in {"alpha", "beta"}:
-            return 1.5
-        if channel == "gamma":
-            return 2.5
-        return 1.0
+    def _compute_band_energy(self) -> Dict[str, float]:
+        if not self._buffer:
+            return {band: 0.0 for band in BAND_FREQUENCIES_HZ}
+        signal = np.array(self._buffer, dtype=float)
+        if signal.size < 4:
+            base_level = float(np.mean(np.abs(signal))) if signal.size else 0.0
+            return {band: base_level for band in BAND_FREQUENCIES_HZ}
+        window = np.hanning(signal.size)
+        spectrum = np.fft.rfft(signal * window)
+        freqs = np.fft.rfftfreq(signal.size, d=1.0 / self.config.sample_rate_hz)
+        power = (np.abs(spectrum) ** 2) / max(1e-9, np.sum(window ** 2))
+        energies: Dict[str, float] = {}
+        for band, (low, high) in BAND_RANGES_HZ.items():
+            mask = (freqs >= low) & (freqs < high)
+            if np.any(mask):
+                energies[band] = float(np.mean(power[mask]))
+            else:
+                energies[band] = 0.0
+        total_energy = sum(energies.values())
+        if total_energy > 0:
+            energies = {band: value / total_energy for band, value in energies.items()}
+        return energies
 
 
 class EEGEmotionClassifier:

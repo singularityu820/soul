@@ -46,6 +46,7 @@ class AgentMessage(BaseModel):
     tts_provider: Optional[str] = None
     audio_reference: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    audio_segments: Optional[List[str]] = None
 
 
 class PipelineEvent(BaseModel):
@@ -75,6 +76,7 @@ class ChatMessage(BaseModel):
     llm_provider: Optional[str] = None
     tts_provider: Optional[str] = None
     audio_reference: Optional[str] = None
+    audio_segments: Optional[List[str]] = None
 
 
 class ChatMessageIn(BaseModel):
