@@ -8,3 +8,15 @@ backend/.venv/
 backend/.mypy_cache/
 frontend/dist/
 .DS_Store
+.vscode/
+.idea/
+logs/
+*.log
+# Temporary files
+*.tmp
+*.swp
+
+docs/
+test*.*
+
+storage/
