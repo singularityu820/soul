@@ -19,4 +19,4 @@ logs/
 docs/
 test*.*
 
-storage/
+backend/storage/
