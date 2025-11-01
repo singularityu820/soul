@@ -67,3 +67,8 @@ class Neo4jGraphStore:
 
     def node_count(self) -> int:
         return len(self._nodes)
+
+    def remove_relations_by_property(self, key: str, value: Any) -> int:
+        before = len(self._relations)
+        self._relations = [rel for rel in self._relations if rel.properties.get(key) != value]
+        return before - len(self._relations)

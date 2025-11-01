@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Dict, Optional
@@ -9,6 +10,8 @@ import httpx
 from ...config import LLMProvider, LLMServiceConfig
 
 _DETECTION_TIMEOUT = 0.35
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -50,8 +53,13 @@ class RemoteLLMClient(BaseLLMClient):
         if not self.api_key:
             return f"[{self.provider.value}] 未配置 API 密钥，使用占位回复。"
         headers: Dict[str, str] = {"Authorization": f"Bearer {self.api_key}"}
+        
+        # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
+        default_model = os.getenv("LLM_MODEL_ID", "default")
+        model = kwargs.get("model", default_model)
+        
         payload = {
-            "model": kwargs.get("model", "default"),
+            "model": model,
             "messages": kwargs.get(
                 "messages",
                 [
@@ -72,7 +80,8 @@ class RemoteLLMClient(BaseLLMClient):
                 )
                 if content:
                     return content
-        except httpx.HTTPError:
+        except httpx.HTTPError as e:
+            logger.warning(f"LLM HTTP error: {e}")
             return f"[{self.provider.value}] 接口不可用，使用占位回复。"
         return f"[{self.provider.value}] 未返回内容。"
 
@@ -103,11 +112,19 @@ class LLMService:
 
     async def generate(self, prompt: str, **kwargs: object) -> str:
         client = self.client()
-        return await client.generate(prompt, **kwargs)
+        logger.info(f"Generating response with LLM provider: {client.provider.value}")
+        try:
+            response = await client.generate(prompt, **kwargs)
+            logger.debug(f"LLM generated response: {response[:50]}...")
+            return response
+        except Exception as e:
+            logger.exception(f"LLM generation error: {e}")
+            raise
 
     def _detect(self) -> LLMDetectionResult:
         config = self.config
         if config.preferred_provider:
+            logger.info(f"Using preferred LLM provider: {config.preferred_provider.value}")
             return LLMDetectionResult(
                 provider=config.preferred_provider,
                 reason="Preferred provider configured.",
@@ -117,12 +134,22 @@ class LLMService:
         if env_choice:
             provider = self._map_provider(env_choice)
             if provider:
+                logger.info(f"Using LLM provider from env: {provider.value}")
                 return LLMDetectionResult(
                     provider=provider,
                     reason="Detected from LLM_PROVIDER environment variable.",
                 )
 
+        # Check for generic LLM configuration (LLM_API_KEY + LLM_BASE_URL)
+        if os.getenv("LLM_API_KEY") and os.getenv("LLM_BASE_URL"):
+            logger.info("Using generic LLM configuration (LLM_API_KEY + LLM_BASE_URL)")
+            return LLMDetectionResult(
+                provider=LLMProvider.OPENAI,  # Use OpenAI-compatible client
+                reason="Found LLM_API_KEY and LLM_BASE_URL environment variables.",
+            )
+
         if not config.allow_auto_detect:
+            logger.warning("LLM auto-detection disabled, using sandbox mode")
             return LLMDetectionResult(provider=LLMProvider.SANDBOX, reason="Auto detect disabled.")
 
         detectors = [
@@ -132,19 +159,33 @@ class LLMService:
             self._detect_vllm,
             self._detect_ollama,
         ]
+        logger.info("Auto-detecting LLM provider...")
         for detector in detectors:
             provider = detector()
             if provider:
+                logger.info(f"LLM provider detected: {provider.provider.value} - {provider.reason}")
                 return provider
 
+        logger.warning("No LLM provider detected, falling back to sandbox mode")
         return LLMDetectionResult(provider=LLMProvider.SANDBOX, reason="No provider matched.")
 
     def _build_client(self, provider: LLMProvider) -> BaseLLMClient:
         timeout = self.config.timeout_seconds
         overrides = self.config.endpoint_overrides
+        
+        # Check for generic LLM configuration first
+        generic_api_key = os.getenv("LLM_API_KEY")
+        generic_base_url = os.getenv("LLM_BASE_URL")
+        
         if provider == LLMProvider.OPENAI:
-            endpoint = overrides.get(provider, "https://api.openai.com/v1/chat/completions")
-            return RemoteLLMClient(provider, endpoint, os.getenv("OPENAI_API_KEY"), timeout)
+            # Use generic config if available, otherwise use OpenAI-specific
+            api_key = generic_api_key or os.getenv("OPENAI_API_KEY")
+            if generic_base_url:
+                # Generic base URL provided, construct chat completions endpoint
+                endpoint = f"{generic_base_url.rstrip('/')}/chat/completions"
+            else:
+                endpoint = overrides.get(provider, "https://api.openai.com/v1/chat/completions")
+            return RemoteLLMClient(provider, endpoint, api_key, timeout)
         if provider == LLMProvider.MODEL_SCOPE:
             endpoint = overrides.get(provider, "https://api-inference.modelscope.cn/v1/services/chat/completions")
             return RemoteLLMClient(provider, endpoint, os.getenv("MODELSCOPE_API_KEY"), timeout)

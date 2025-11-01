@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
-from typing import Iterable, Optional
+from typing import Optional
 
 from ...config import AgentConfig
 from ...schemas import AgentMessage, ChannelEmotion, EmotionState
 from .llm import LLMService
 from .memory_adapter import AgentMemory
 from .tts import SynthesizedSpeech, TTSService
+
+logger = logging.getLogger(__name__)
 
 
 class ConversationalAgent:
@@ -25,32 +28,59 @@ class ConversationalAgent:
         self.config = config or AgentConfig()
         self.llm_service = llm_service or LLMService()
         self.tts_service = tts_service or TTSService()
+        self.memory_tool = memory.tool
         self._outbound_listeners: set[asyncio.Queue[AgentMessage]] = set()
         self._last_trigger_time: float = 0.0
         self._last_emotion: Optional[EmotionState] = None
 
     async def ingest_user_message(self, text: str) -> None:
-        self.memory.add_event(text=f"User: {text}", tags=["user", "dialogue"])
+        self.memory.record_user_message(text)
 
-    async def handle_emotion_state(self, emotion: EmotionState) -> Optional[AgentMessage]:
+    async def handle_emotion_state(
+        self,
+        emotion: EmotionState,
+        proactive: bool = False,
+    ) -> Optional[AgentMessage]:
         now = time.time()
-        self.memory.add_event(
-            text=f"Emotion observed: {emotion.label} (score={emotion.mood_score:.2f})",
-            tags=["emotion"],
+        self.memory.record_emotion_observation(
+            label=emotion.label,
+            mood_score=emotion.mood_score,
+            confidence=emotion.confidence,
         )
+        if not proactive:
+            self._last_emotion = emotion
+            return None
+
         should_speak = self._should_speak(now, emotion)
         self._last_emotion = emotion
         if not should_speak:
             return None
 
-        message = await self._compose_message(emotion)
+        message = await self._compose_message(emotion, user_text=None, proactive=True)
+        self.memory.record_agent_message(message.text, proactive=True)
         await self._broadcast(message)
         self._last_trigger_time = now
         return message
 
-    async def respond_with_context(self, emotion: Optional[EmotionState]) -> AgentMessage:
+    async def respond_with_context(
+        self,
+        emotion: Optional[EmotionState],
+        user_text: Optional[str] = None,
+    ) -> AgentMessage:
+        logger.info(
+            "Agent responding with emotion: %s", emotion.label if emotion else "neutral"
+        )
         state = emotion or self._neutral_emotion()
-        return await self._compose_message(state)
+        message = await self._compose_message(state, user_text=user_text, proactive=False)
+        logger.info(
+            "Agent composed message: %s... (LLM: %s)",
+            message.text[:50],
+            message.llm_provider,
+        )
+        self.memory.record_agent_message(message.text, proactive=False)
+        if user_text:
+            self.memory.add_interaction(user_text, message.text)
+        return message
 
     def subscribe(self) -> asyncio.Queue[AgentMessage]:
         queue: asyncio.Queue[AgentMessage] = asyncio.Queue()
@@ -61,36 +91,31 @@ class ConversationalAgent:
         self._outbound_listeners.discard(queue)
 
     async def _broadcast(self, message: AgentMessage) -> None:
-        self.memory.add_event(text=f"Agent: {message.text}", tags=["agent", "dialogue"])
         for queue in list(self._outbound_listeners):
             await queue.put(message)
 
     def _should_speak(self, now: float, emotion: EmotionState) -> bool:
         if not self._last_emotion:
-            return True
-        delta_time = now - self._last_trigger_time
-        mood_delta = abs(emotion.mood_score - self._last_emotion.mood_score)
-        label_changed = emotion.label != self._last_emotion.label
+            return emotion.mood_score < self.config.negative_threshold
 
-        if delta_time > self.config.proactive_interval_seconds:
-            return True
-        if delta_time > self.config.check_interval_seconds and label_changed:
-            return True
+        delta_time = now - self._last_trigger_time
+        if delta_time < self.config.check_interval_seconds:
+            return False
+
         if emotion.mood_score < self.config.negative_threshold:
             return True
-        if (
-            emotion.mood_score > self.config.positive_threshold
-            and delta_time > self.config.check_interval_seconds
-        ):
-            return True
-        if mood_delta > 0.4 and delta_time > self.config.check_interval_seconds:
-            return True
+
         return False
 
-    async def _compose_message(self, emotion: EmotionState) -> AgentMessage:
+    async def _compose_message(
+        self,
+        emotion: EmotionState,
+        user_text: Optional[str] = None,
+        proactive: bool = False,
+    ) -> AgentMessage:
         voice_style = self._voice_style_for(emotion)
         language = self._language_for(emotion)
-        prompt = self._build_prompt(emotion, voice_style, language)
+        prompt = self._build_prompt(emotion, voice_style, language, user_text, proactive)
         text = await self._generate_with_llm(prompt, emotion)
         speech = await self._maybe_synthesize(text, voice_style, language)
         return AgentMessage(
@@ -104,10 +129,19 @@ class ConversationalAgent:
             audio_segments=speech.segments if speech else None,
         )
 
-    def _build_prompt(self, emotion: EmotionState, voice_style: str, language: str) -> str:
+    def _build_prompt(
+        self,
+        emotion: EmotionState,
+        voice_style: str,
+        language: str,
+        user_text: Optional[str],
+        proactive: bool,
+    ) -> str:
         mood_summary = (
             f"当前情绪：{emotion.label}，心境值 {emotion.mood_score:.2f}，置信度 {emotion.confidence:.2f}."
         )
+        context_source = user_text if user_text else emotion.label
+        memory_context = self.memory.context_for(context_source, limit=5)
         recent = self.memory.search("dialogue", limit=5)
         memory_lines = "\n".join(item.content for item in recent)
         base_instruction = (
@@ -115,17 +149,38 @@ class ConversationalAgent:
             "语言要口语化，适当使用 emoji，让对话轻松。"
         )
         prompt_sections = [base_instruction, mood_summary]
-        if memory_lines:
-            prompt_sections.append("近期记忆：" + memory_lines)
+        if user_text:
+            prompt_sections.append(f"用户最新消息：{user_text}")
+        elif memory_lines:
+            prompt_sections.append("近期对话片段：" + memory_lines)
+        context_data = self.memory.build_context(context_source, recent_limit=5, top_k=3)
+        recent_lines = context_data.get("recent", [])
+        if recent_lines:
+            prompt_sections.append("最近对话记忆：" + " | ".join(recent_lines))
+        relevant_items = context_data.get("relevant", [])
+        if relevant_items:
+            summary = [f"[{item['type']}] {item['content']}" for item in relevant_items]
+            prompt_sections.append("相关长期记忆：" + " | ".join(summary))
+        if memory_context:
+            prompt_sections.append(memory_context)
+        if proactive:
+            prompt_sections.append(
+                "用户当前没有主动发言，请你根据情绪状态主动给予安慰和陪伴，"
+                "关注其情绪并温柔地开启话题，不要强迫对方回应。"
+            )
         prompt_sections.append(f"语气偏向：{voice_style}")
         prompt_sections.append(f"语言：{language}")
-        prompt_sections.append("请输出下一句回复。")
+        prompt_sections.append("请输出下一句回复，并紧扣上述信息。")
         return "\n".join(prompt_sections)
 
     async def _generate_with_llm(self, prompt: str, emotion: EmotionState) -> str:
         try:
-            return await self.llm_service.generate(prompt)
-        except Exception:
+            logger.debug(f"Calling LLM with prompt: {prompt[:100]}...")
+            response = await self.llm_service.generate(prompt)
+            logger.info(f"LLM response received: {response[:50]}...")
+            return response
+        except Exception as e:
+            logger.warning(f"LLM generation failed: {e}, using fallback text")
             return self._fallback_text(emotion)
 
     def _voice_style_for(self, emotion: EmotionState) -> str:

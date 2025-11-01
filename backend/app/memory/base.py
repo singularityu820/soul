@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence
 from uuid import uuid4
 
 
@@ -28,6 +28,13 @@ class MemoryConfig:
     semantic_graph_path: str = "storage/semantic_graph.json"
     vector_dimension: int = 384
     similarity_top_k: int = 5
+    storage_path: str = "./memory_data"
+    max_capacity: int = 100
+    importance_threshold: float = 0.1
+    decay_factor: float = 0.95
+    working_memory_capacity: int = 10
+    working_memory_tokens: int = 2000
+    working_memory_ttl_minutes: int = 120
 
 
 @dataclass(slots=True)
@@ -35,11 +42,37 @@ class MemoryItem:
     kind: MemoryKind
     content: str
     tags: Sequence[str] = field(default_factory=tuple)
-    metadata: Mapping[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
     embedding: Optional[List[float]] = None
     score: Optional[float] = None
+    importance: float = 0.5
     created_at: datetime = field(default_factory=datetime.utcnow)
     record_id: str = field(default_factory=lambda: uuid4().hex)
+    user_id: str = "default_user"
+
+    @property
+    def id(self) -> str:
+        return self.record_id
+
+    @property
+    def memory_type(self) -> str:
+        return self.kind.value
+
+    def copy(self, **updates: Any) -> "MemoryItem":
+        data = {
+            "kind": self.kind,
+            "content": self.content,
+            "tags": tuple(self.tags),
+            "metadata": dict(self.metadata),
+            "embedding": list(self.embedding) if self.embedding is not None else None,
+            "score": self.score,
+            "importance": self.importance,
+            "created_at": self.created_at,
+            "record_id": self.record_id,
+            "user_id": self.user_id,
+        }
+        data.update(updates)
+        return MemoryItem(**data)
 
 
 class BaseMemory(ABC):
@@ -52,12 +85,53 @@ class BaseMemory(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def search(self, query: str, limit: Optional[int] = None) -> List[MemoryItem]:
+    def retrieve(self, query: str, limit: Optional[int] = None, **kwargs: Any) -> List[MemoryItem]:
         raise NotImplementedError
+
+    def search(self, query: str, limit: Optional[int] = None, **kwargs: Any) -> List[MemoryItem]:
+        return self.retrieve(query, limit=limit, **kwargs)
 
     @abstractmethod
     def recent(self, limit: Optional[int] = None) -> List[MemoryItem]:
         raise NotImplementedError
+
+    @abstractmethod
+    def update(
+        self,
+        record_id: str,
+        content: Optional[str] = None,
+        importance: Optional[float] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def remove(self, record_id: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def has_memory(self, record_id: str) -> bool:
+        raise NotImplementedError
+
+    @abstractmethod
+    def clear(self) -> None:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_stats(self) -> Dict[str, Any]:
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_all(self) -> List[MemoryItem]:
+        raise NotImplementedError
+
+    def forget(
+        self,
+        strategy: str = "importance_based",
+        threshold: float = 0.1,
+        max_age_days: int = 30,
+    ) -> int:
+        return 0
 
     def add_bulk(self, items: Iterable[MemoryItem]) -> List[str]:
         identifiers: List[str] = []

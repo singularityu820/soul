@@ -2,13 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import contextlib
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
+from pathlib import Path
+from typing import AsyncIterator, Optional
+import uuid
 
-from fastapi import Depends, FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+import httpx
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
 from starlette.websockets import WebSocketState
+
+# Load environment variables from .env file
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from .config import (
     AgentConfig,
@@ -36,6 +45,7 @@ from .schemas import (
     UserMessageIn,
 )
 from .services.agent import AgentMemory, ConversationalAgent, LLMService, TTSService
+from .services.agent.asr import ASRService
 from .services.chat.service import ChatService
 from .services.emotion import (
     AvatarOrchestrator,
@@ -46,6 +56,7 @@ from .services.emotion import (
     FaceEmotionTool,
 )
 from .services.realtime.webrtc import WebRTCSignalHub
+from .services.realtime.session import AgentWebRTCSession
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -78,6 +89,7 @@ avatar = AvatarOrchestrator(AvatarConfig())
 memory = AgentMemory(AgentConfig())
 llm_service = LLMService(LLMServiceConfig())
 tts_service = TTSService(TTSServiceConfig())
+asr_service = ASRService()
 agent = ConversationalAgent(
     memory,
     AgentConfig(),
@@ -94,6 +106,80 @@ pipeline = EmotionPipeline(
 )
 chat_service = ChatService(agent=agent, pipeline=pipeline)
 webrtc_hub = WebRTCSignalHub()
+# WebRTC 会话管理
+webrtc_sessions: dict[str, AgentWebRTCSession] = {}
+active_webrtc_sessions = 0
+
+# 跟踪客户端与房间 ID 的映射，兼容前端传入 null 等占位值
+_client_room_map: dict[str, str] = {}
+_client_room_lock = asyncio.Lock()
+_INVALID_ROOM_TOKENS = {"", "null", "undefined"}
+
+
+def _client_key(host: str | None) -> str:
+    return host or "unknown"
+
+
+async def _resolve_room_id(
+    room_id: str,
+    *,
+    request: Request | None = None,
+    websocket: WebSocket | None = None,
+    allow_create: bool = False,
+) -> str:
+    raw = (room_id or "").strip()
+    client = None
+    if request and request.client:
+        client = request.client
+    elif websocket and websocket.client:
+        client = websocket.client
+
+    host = client.host if client else None
+    key = _client_key(host)
+
+    if raw and raw.lower() not in _INVALID_ROOM_TOKENS:
+        if host:
+            async with _client_room_lock:
+                _client_room_map[key] = raw
+        return raw
+
+    if host:
+        async with _client_room_lock:
+            existing = _client_room_map.get(key)
+            if existing:
+                return existing
+            if allow_create:
+                new_room = uuid.uuid4().hex
+                _client_room_map[key] = new_room
+                logger.warning(
+                    "Received invalid room id from %s. Generated new room: %s",
+                    key,
+                    new_room,
+                )
+                return new_room
+
+    if allow_create:
+        new_room = uuid.uuid4().hex
+        logger.warning("Received invalid room id. Generated new room: %s", new_room)
+        return new_room
+
+    raise HTTPException(status_code=400, detail="Invalid WebRTC room id")
+
+
+async def _release_room_id(room_id: str) -> None:
+    async with _client_room_lock:
+        stale_keys = [k for k, v in _client_room_map.items() if v == room_id]
+        for key in stale_keys:
+            _client_room_map.pop(key, None)
+
+
+async def _release_client_mapping(request: Request | None = None) -> None:
+    if not request or not request.client:
+        return
+    host = request.client.host
+    key = _client_key(host)
+    async with _client_room_lock:
+        _client_room_map.pop(key, None)
 
 logger.info(
     "LLM provider detected: %s (%s)",
@@ -104,6 +190,10 @@ logger.info(
     "TTS provider detected: %s (%s)",
     tts_service.provider.value,
     tts_service.detection_reason(),
+)
+logger.info(
+    "ASR provider detected: %s",
+    asr_service.provider.value,
 )
 
 
@@ -125,6 +215,43 @@ async def get_chat_service() -> ChatService:
 
 async def get_webrtc_hub() -> WebRTCSignalHub:
     return webrtc_hub
+
+
+async def fetch_audio_from_url(url: str) -> bytes | None:
+    """
+    从 URL 下载音频数据并转换为 PCM 格式。
+    
+    Args:
+        url: 音频文件 URL (可能是 WAV, MP3 等)
+    
+    Returns:
+        PCM 16-bit 音频数据，如果失败返回 None
+    """
+    try:
+        # 跳过占位 URL
+        if url.startswith(("sandbox://", "empty://", "error://", "missing-key://")):
+            logger.debug("Skipping placeholder audio URL: %s", url)
+            return None
+        
+        # 下载音频文件
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            if not response.is_success:
+                logger.error("Failed to download audio from %s: %s", url, response.status_code)
+                return None
+            
+            audio_data = response.content
+            
+        # TODO: 如果需要格式转换（WAV → PCM），可以使用 av 库
+        # 当前假设 TTS 返回的是 WAV 格式，直接返回
+        # 实际使用中可能需要解析 WAV header 并提取 PCM 数据
+        
+        logger.info("Downloaded %d bytes of audio from %s", len(audio_data), url)
+        return audio_data
+        
+    except Exception as e:
+        logger.exception("Error fetching audio from %s: %s", url, e)
+        return None
 
 
 @app.get("/health")
@@ -211,7 +338,21 @@ async def post_message(
     thread = await chat.get_thread(thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
-    return await chat.add_user_message(thread_id, payload.text, payload.language)
+    message = await chat.add_user_message(thread_id, payload.text, payload.language)
+    
+    # 如果存在对应的 WebRTC 会话，推送 TTS 音频
+    room_id = f"{thread_id}-voice"
+    if room_id in webrtc_sessions:
+        session = webrtc_sessions[room_id]
+        # TODO: 从 agent 响应中获取 TTS 音频并推送
+        # agent_response = await agent.respond_with_context(...)
+        # if agent_response.audio_segments:
+        #     for segment_url in agent_response.audio_segments:
+        #         audio_data = await fetch_audio(segment_url)
+        #         await session.push_tts_audio(audio_data)
+        logger.info("WebRTC session active for room %s, ready for TTS push", room_id)
+    
+    return message
 
 
 @app.websocket("/ws/pipeline")
@@ -276,28 +417,140 @@ async def chat_stream(
             await websocket.close()
 
 
-@app.post("/webrtc/{room_id}/offer", response_model=WebRTCStateOut, status_code=202)
+@app.post("/webrtc/{room_id}/offer", status_code=200)
 async def publish_offer(
     room_id: str,
     payload: WebRTCOffer,
+    request: Request,
     hub: WebRTCSignalHub = Depends(get_webrtc_hub),
-) -> WebRTCStateOut:
-    state = await hub.publish_offer(room_id, payload)
-    return WebRTCStateOut(
-        room_id=state.room_id,
-        offer=state.offer,
-        answer=state.answer,
-        candidates=state.candidates,
-        updated_at=state.updated_at,
-    )
+    agent_service: ConversationalAgent = Depends(get_agent),
+) -> dict:
+    """
+    处理来自客户端的 WebRTC offer，创建 aiortc 会话并返回 answer。
+    集成完整的语音对话流程: 麦克风 → ASR → LLM → TTS → WebRTC
+    """
+    room_id = await _resolve_room_id(room_id, request=request, allow_create=True)
+    mode = (payload.metadata or {}).get("mode", "voice") if payload.metadata else "voice"
+    mode = str(mode).lower() if mode else "voice"
+    if mode not in {"voice", "video"}:
+        logger.warning("Unsupported WebRTC mode '%s', falling back to voice", mode)
+        mode = "voice"
+
+    try:
+        # 音频接收回调：完整的语音对话链路
+        async def on_audio_received(audio_bytes: bytes) -> None:
+            try:
+                logger.info("Processing audio chunk: %d bytes from room %s", len(audio_bytes), room_id)
+                
+                # 1. ASR: 语音转文字
+                text = await asr_service.transcribe(audio_bytes, language="zh", sample_rate=16000)
+                if not text or text.startswith("[沙盒模式]"):
+                    logger.info("ASR returned empty or sandbox result: %s", text)
+                    return
+                
+                logger.info("ASR transcript: %s", text)
+                
+                # 2. 存储用户消息到 memory
+                await agent_service.ingest_user_message(text)
+                
+                # 3. LLM: 获取 agent 回复
+                emotion = pipeline.latest_state
+                agent_response = await agent_service.respond_with_context(
+                    emotion,
+                    user_text=text,
+                )
+                logger.info("Agent response: %s", agent_response.text)
+                
+                # 4. TTS: 将回复转换为语音
+                if agent_response.audio_segments:
+                    # 使用分段音频（GPT-SoVITs）
+                    for segment_url in agent_response.audio_segments:
+                        # 下载音频数据
+                        audio_data = await fetch_audio_from_url(segment_url)
+                        if audio_data:
+                            # 推送到 WebRTC
+                            session = webrtc_sessions.get(room_id)
+                            if session:
+                                await session.push_tts_audio(audio_data)
+                elif agent_response.audio_reference:
+                    # 使用单个音频引用
+                    audio_data = await fetch_audio_from_url(agent_response.audio_reference)
+                    if audio_data:
+                        session = webrtc_sessions.get(room_id)
+                        if session:
+                            await session.push_tts_audio(audio_data)
+                else:
+                    logger.warning("No TTS audio generated for response")
+                    
+            except Exception as e:
+                logger.exception("Error processing audio in room %s: %s", room_id, e)
+
+        # 创建或获取会话
+        global active_webrtc_sessions
+        newly_created = room_id not in webrtc_sessions
+
+        if room_id in webrtc_sessions:
+            session = webrtc_sessions[room_id]
+            await session.close()
+
+        async def on_local_candidate(candidate: Optional[WebRTCCandidate]) -> None:
+            if candidate is None:
+                logger.info("Local ICE candidate gathering finished for room: %s", room_id)
+                return
+            await hub.add_candidate(room_id, candidate)
+
+        session = AgentWebRTCSession(
+            room_id=room_id,
+            on_audio_received=on_audio_received,
+            on_local_candidate=on_local_candidate,
+            mode=mode,
+        )
+        webrtc_sessions[room_id] = session
+
+        if newly_created:
+            active_webrtc_sessions += 1
+            if active_webrtc_sessions == 1:
+                pipeline.enable_proactive()
+
+        # 处理 offer 并生成 answer
+        answer_sdp = await session.handle_offer(payload.sdp)
+        answer_model = WebRTCAnswer(sdp=answer_sdp, metadata={"mode": mode})
+
+        # 同时更新信令 hub（保持向后兼容）
+        state = await hub.publish_offer(room_id, payload)
+        await hub.publish_answer(room_id, answer_model)
+
+        logger.info("WebRTC offer processed for room: %s", room_id)
+
+        return {
+            "type": "answer",
+            "sdp": answer_sdp,
+            "room_id": room_id,
+            "mode": mode,
+        }
+
+    except Exception as e:
+        session = webrtc_sessions.pop(room_id, None)
+        if session:
+            with contextlib.suppress(Exception):
+                await session.close()
+        await _release_room_id(room_id)
+        if newly_created:
+            active_webrtc_sessions = max(0, active_webrtc_sessions - 1)
+            if active_webrtc_sessions == 0:
+                pipeline.disable_proactive()
+        logger.exception("Failed to process WebRTC offer for room: %s", room_id)
+        raise HTTPException(status_code=500, detail=f"Failed to process offer: {str(e)}")
 
 
 @app.post("/webrtc/{room_id}/answer", response_model=WebRTCStateOut, status_code=202)
 async def publish_answer(
     room_id: str,
     payload: WebRTCAnswer,
+    request: Request,
     hub: WebRTCSignalHub = Depends(get_webrtc_hub),
 ) -> WebRTCStateOut:
+    room_id = await _resolve_room_id(room_id, request=request, allow_create=False)
     state = await hub.publish_answer(room_id, payload)
     return WebRTCStateOut(
         room_id=state.room_id,
@@ -312,9 +565,18 @@ async def publish_answer(
 async def publish_candidate(
     room_id: str,
     payload: WebRTCCandidate,
+    request: Request,
     hub: WebRTCSignalHub = Depends(get_webrtc_hub),
 ) -> WebRTCStateOut:
+    room_id = await _resolve_room_id(room_id, request=request, allow_create=False)
     state = await hub.add_candidate(room_id, payload)
+
+    session = webrtc_sessions.get(room_id)
+    if session:
+        await session.add_remote_candidate(payload)
+    else:
+        logger.warning("Received ICE candidate for inactive room: %s", room_id)
+
     return WebRTCStateOut(
         room_id=state.room_id,
         offer=state.offer,
@@ -327,8 +589,10 @@ async def publish_candidate(
 @app.get("/webrtc/{room_id}", response_model=WebRTCStateOut)
 async def get_webrtc_state(
     room_id: str,
+    request: Request,
     hub: WebRTCSignalHub = Depends(get_webrtc_hub),
 ) -> WebRTCStateOut:
+    room_id = await _resolve_room_id(room_id, request=request, allow_create=False)
     state = await hub.get_state(room_id)
     if not state:
         raise HTTPException(status_code=404, detail="Room not found")
@@ -347,6 +611,11 @@ async def webrtc_signaling(
     room_id: str,
     hub: WebRTCSignalHub = Depends(get_webrtc_hub),
 ) -> None:
+    try:
+        room_id = await _resolve_room_id(room_id, websocket=websocket, allow_create=False)
+    except HTTPException:
+        await websocket.close(code=1008, reason="Invalid room id")
+        return
     await websocket.accept()
     queue = await hub.subscribe(room_id)
 
@@ -376,3 +645,180 @@ async def webrtc_signaling(
         hub.unsubscribe(room_id, queue)
         if websocket.application_state != WebSocketState.DISCONNECTED:
             await websocket.close()
+
+
+@app.delete("/webrtc/{room_id}")
+async def close_webrtc_session(room_id: str, request: Request) -> dict:
+    """关闭 WebRTC 会话并释放资源"""
+    resolved_id: str | None = None
+    try:
+        room_id = await _resolve_room_id(room_id, request=request, allow_create=False)
+        resolved_id = room_id
+    except HTTPException:
+        logger.info("Received delete for invalid room id; ignoring")
+
+    if room_id in webrtc_sessions:
+        session = webrtc_sessions[room_id]
+        await session.close()
+        del webrtc_sessions[room_id]
+        global active_webrtc_sessions
+        if active_webrtc_sessions > 0:
+            active_webrtc_sessions -= 1
+            if active_webrtc_sessions == 0:
+                pipeline.disable_proactive()
+        logger.info("Closed WebRTC session for room: %s", room_id)
+        await _release_room_id(room_id)
+        await _release_client_mapping(request)
+        return {"status": "closed", "room_id": room_id}
+
+    if resolved_id:
+        await _release_room_id(resolved_id)
+
+    await _release_client_mapping(request)
+    return {"status": "missing", "room_id": room_id}
+
+
+# ============================================================================
+# HTTP 音频上传接口 (WebRTC 替代方案)
+# ============================================================================
+
+@app.post("/audio/conversation")
+async def audio_conversation(
+    audio: UploadFile = File(...),
+    thread_id: Optional[str] = Form(None),
+    voice: str = Form("zhichu_emo"),
+    locale: str = Form("zh-CN"),
+) -> dict:
+    """
+    音频对话接口 - WebRTC 的替代方案
+    
+    上传音频文件,执行 ASR → LLM → TTS 流程,返回响应音频
+    
+    Args:
+        audio: 音频文件 (WAV, MP3, OGG 等)
+        thread_id: 对话线程 ID (可选,用于保持上下文)
+        voice: TTS 语音 (默认: zhichu_emo)
+        locale: 语音地区 (默认: zh-CN)
+    
+    Returns:
+        {
+            "transcript": "用户说的话",
+            "response_text": "AI 回复文本",
+            "audio_url": "响应音频的 URL 或 base64"
+        }
+    """
+    try:
+        # 1. 读取音频数据
+        audio_data = await audio.read()
+        logger.info(f"Received audio upload: {len(audio_data)} bytes, content_type={audio.content_type}")
+        
+        # 2. ASR 转录
+        logger.info("Starting ASR transcription...")
+        transcript = await asr_service.transcribe(audio_data)
+        logger.info(f"ASR transcript: {transcript}")
+        
+        if not transcript or not transcript.strip():
+            raise HTTPException(status_code=400, detail="无法识别语音内容")
+        
+        # 3. LLM 生成响应
+        logger.info("Generating LLM response...")
+        
+        # 简单对话(不使用 agent 的复杂流程)
+        # 构建对话上下文
+        if thread_id:
+            # 获取最近几条消息作为上下文
+            try:
+                history_response = await httpx.AsyncClient().get(
+                    f"http://localhost:8000/chat/threads/{thread_id}/messages",
+                    timeout=5.0
+                )
+                if history_response.status_code == 200:
+                    history = history_response.json()
+                    context_messages = history[-5:] if len(history) > 5 else history
+                    context = "\n".join([
+                        f"{'用户' if msg.get('role') == 'user' else 'AI'}: {msg.get('content', '')}"
+                        for msg in context_messages
+                    ])
+                    prompt = f"{context}\n用户: {transcript}\nAI:"
+                else:
+                    prompt = f"用户: {transcript}\nAI:"
+            except:
+                prompt = f"用户: {transcript}\nAI:"
+        else:
+            prompt = f"用户: {transcript}\nAI:"
+        
+        response_text = await llm_service.generate(prompt=prompt, temperature=0.7)
+        logger.info(f"LLM response: {response_text}")
+        
+        # 4. TTS 合成
+        logger.info("Synthesizing TTS audio...")
+        tts_result = await tts_service.synthesize(
+            text=response_text,
+            voice=voice,
+            locale=locale,
+        )
+        
+        # 5. 返回结果
+        return {
+            "transcript": transcript,
+            "response_text": response_text,
+            "audio_reference": tts_result.audio_reference,
+            "tts_provider": tts_result.provider.value,
+            "voice": tts_result.voice,
+            "locale": tts_result.locale,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Audio conversation failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"处理音频失败: {str(e)}")
+
+
+@app.get("/audio/download")
+async def download_audio(reference: str) -> Response:
+    """
+    下载音频文件
+    
+    Args:
+        reference: 音频引用 (URL 或文件路径)
+    
+    Returns:
+        音频文件内容
+    """
+    try:
+        # 如果是 HTTP URL,下载它
+        if reference.startswith("http://") or reference.startswith("https://"):
+            async with httpx.AsyncClient() as client:
+                response = await client.get(reference)
+                response.raise_for_status()
+                return Response(
+                    content=response.content,
+                    media_type="audio/wav",
+                    headers={
+                        "Content-Disposition": f'attachment; filename="response.wav"'
+                    }
+                )
+        
+        # 如果是本地文件路径
+        file_path = Path(reference)
+        if file_path.exists():
+            with open(file_path, "rb") as f:
+                content = f.read()
+            return Response(
+                content=content,
+                media_type="audio/wav",
+                headers={
+                    "Content-Disposition": f'attachment; filename="{file_path.name}"'
+                }
+            )
+        
+        raise HTTPException(status_code=404, detail="音频文件不存在")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Audio download failed: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"下载音频失败: {str(e)}")
+
+

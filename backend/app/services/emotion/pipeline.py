@@ -38,6 +38,19 @@ class EmotionPipeline:
         self._running = asyncio.Event()
         self.latest_state: Optional[EmotionState] = None
         self.latest_message: Optional[AgentMessage] = None
+        self._proactive_enabled: bool = False
+
+    @property
+    def proactive_enabled(self) -> bool:
+        return self._proactive_enabled
+
+    def enable_proactive(self) -> None:
+        self._proactive_enabled = True
+        logger.info("Emotion pipeline proactive mode enabled")
+
+    def disable_proactive(self) -> None:
+        self._proactive_enabled = False
+        logger.info("Emotion pipeline proactive mode disabled")
 
     async def start(self) -> None:
         if self._task and not self._task.done():
@@ -84,7 +97,9 @@ class EmotionPipeline:
                 fused_with_wave = fused.model_copy(update={"waveform": sample.waveform})
 
                 avatar_pose = self.avatar.translate(fused_with_wave)
-                agent_message = await self.agent.handle_emotion_state(fused_with_wave)
+                agent_message = await self.agent.handle_emotion_state(
+                    fused_with_wave, proactive=self._proactive_enabled
+                )
 
                 event = PipelineEvent(
                     emotion=fused_with_wave,

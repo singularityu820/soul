@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import uuid
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from typing import Dict, Iterable, List, Optional
 from ...schemas import AgentMessage, ChatEvent, ChatMessage, ChatThreadOut, EmotionState
 from ..agent import ConversationalAgent
 from ..emotion.pipeline import EmotionPipeline
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -66,7 +69,10 @@ class ChatService:
             return messages[-limit:]
 
     async def add_user_message(self, thread_id: str, text: str, language: str) -> ChatMessage:
+        logger.info(f"User message received: thread={thread_id}, text='{text[:50]}...'")
         emotion = self.pipeline.latest_state
+        logger.debug(f"Current emotion state: {emotion.label if emotion else 'None'}")
+        
         message = await self._append_message(
             thread_id=thread_id,
             role="user",
@@ -75,8 +81,14 @@ class ChatService:
             emotion=emotion,
             agent_message=None,
         )
+        logger.debug(f"User message appended with id={message.message_id}")
+        
         await self.agent.ingest_user_message(text)
-        asyncio.create_task(self._agent_follow_up(thread_id, emotion))
+        logger.debug(f"User message ingested by agent")
+        
+        asyncio.create_task(self._agent_follow_up(thread_id, emotion, text))
+        logger.info(f"Agent follow-up task created for thread {thread_id}")
+        
         return message
 
     async def subscribe(self) -> asyncio.Queue[ChatEvent]:
@@ -127,10 +139,19 @@ class ChatService:
         self,
         thread_id: str,
         emotion_hint: Optional[EmotionState],
+        user_text: Optional[str],
     ) -> None:
         try:
+            logger.info(f"Agent follow-up started for thread {thread_id}")
             emotion = emotion_hint or self.pipeline.latest_state
-            agent_message = await self.agent.respond_with_context(emotion)
+            logger.debug(f"Using emotion: {emotion.label if emotion else 'None'}")
+            
+            agent_message = await self.agent.respond_with_context(
+                emotion,
+                user_text=user_text,
+            )
+            logger.info(f"Agent generated message: {agent_message.text[:50]}...")
+            
             await self._append_message(
                 thread_id=thread_id,
                 role="agent",
@@ -139,9 +160,10 @@ class ChatService:
                 emotion=emotion,
                 agent_message=agent_message,
             )
-        except Exception:
-            # Swallow errors to avoid crashing background task; logs handled in caller.
-            pass
+            logger.info(f"Agent message appended to thread {thread_id}")
+        except Exception as e:
+            logger.exception(f"Agent follow-up failed for thread {thread_id}: {e}")
+            # Swallow errors to avoid crashing background task, but log them
 
     async def _broadcast(self, event: ChatEvent) -> None:
         for queue in list(self._listeners):

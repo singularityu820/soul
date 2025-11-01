@@ -30,11 +30,11 @@ class QdrantVectorStore:
         bucket = self._collections.setdefault(collection, {})
         bucket[record.record_id] = record
 
-    def remove(self, collection: str, record_id: str) -> None:
+    def remove(self, collection: str, record_id: str) -> bool:
         bucket = self._collections.get(collection)
         if not bucket:
-            return
-        bucket.pop(record_id, None)
+            return False
+        return bucket.pop(record_id, None) is not None
 
     def search(
         self,

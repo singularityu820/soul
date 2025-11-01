@@ -138,6 +138,7 @@ class MemoryRecordOut(BaseModel):
     text: str
     timestamp: datetime
     tags: List[str]
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class MemorySnapshotOut(BaseModel):

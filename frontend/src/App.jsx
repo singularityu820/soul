@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AvatarCanvas from "./components/AvatarCanvas.jsx";
+import AudioRecordButton from "./components/AudioRecordButton.jsx";
 import ChatSidebar from "./components/chat/ChatSidebar.jsx";
 import ChatWindow from "./components/chat/ChatWindow.jsx";
 import EmotionPanel from "./components/chat/EmotionPanel.jsx";
+import { useWebRTC } from "./hooks/useWebRTC.js";
 
 const API_PREFIX = "/api";
 
 const makeWsUrl = (path) => {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const { host } = window.location;
-  return `${protocol}://${host}${path}`;
+  // 使用后端的 WebSocket 地址
+  const host = window.location.hostname;
+  const port = 8000;  // 后端端口
+  return `${protocol}://${host}:${port}${path}`;
 };
 
 export default function App() {
@@ -21,9 +25,32 @@ export default function App() {
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [callStatus, setCallStatus] = useState(null);
+  const [activeCallRoomId, setActiveCallRoomId] = useState(null);
 
   const chatSocketRef = useRef(null);
   const messageIdsRef = useRef(new Set());
+  const remoteAudioRef = useRef(null);
+
+  // WebRTC hook
+  const {
+    startCall,
+    stopCall,
+    connectionState,
+    isConnecting,
+    remoteAudioRef: webrtcAudioRef,
+  } = useWebRTC(
+    activeCallRoomId,
+    (remoteStream) => {
+      console.log("Remote audio stream received", remoteStream);
+      if (remoteAudioRef.current) {
+        remoteAudioRef.current.srcObject = remoteStream;
+      }
+    },
+    (error) => {
+      console.error("WebRTC error:", error);
+      setCallStatus({ mode: callStatus?.mode, message: `连接失败: ${error.message}` });
+    }
+  );
 
   const emotion = pipelineEvent?.emotion ?? null;
   const avatarPose = pipelineEvent?.avatar ?? null;
@@ -158,25 +185,45 @@ export default function App() {
         setCallStatus({ mode, message: "请选择会话后再发起通话" });
         return;
       }
+
       const roomId = `${activeThreadId}-${mode}`;
-      setCallStatus({ mode, message: "正在建立信令连接…" });
+
+      // 如果已有通话，先停止
+      if (activeCallRoomId) {
+        stopCall();
+        setActiveCallRoomId(null);
+        setCallStatus(null);
+        return;
+      }
+
+      // 启动新通话
+      setActiveCallRoomId(roomId);
+      setCallStatus({ mode, message: "正在建立连接…" });
+
       try {
-        await fetch(`${API_PREFIX}/webrtc/${roomId}/offer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sdp: `${mode}-placeholder-${Date.now()}`,
-            metadata: { initiator: "user" },
-          }),
-        });
-        setCallStatus({ mode, message: "等待对端加入（占位模式）" });
+        await startCall({ roomId, mode });
+        setCallStatus({ mode, message: "通话已建立" });
       } catch (error) {
-        console.error("Failed to publish WebRTC offer", error);
-        setCallStatus({ mode, message: "信令未就绪，请稍后重试" });
+        console.error("Failed to start call", error);
+        setCallStatus({ mode, message: "连接失败，请重试" });
+        setActiveCallRoomId(null);
       }
     },
-    [activeThreadId]
+    [activeThreadId, activeCallRoomId, startCall, stopCall]
   );
+
+  // 监听连接状态变化
+  useEffect(() => {
+    if (connectionState === "connected") {
+      setCallStatus((prev) => prev ? { ...prev, message: "通话中" } : null);
+    } else if (connectionState === "failed") {
+      setCallStatus((prev) => prev ? { ...prev, message: "连接失败" } : null);
+      setActiveCallRoomId(null);
+    } else if (connectionState === "closed") {
+      setCallStatus(null);
+      setActiveCallRoomId(null);
+    }
+  }, [connectionState]);
 
   return (
     <div className="app-shell">
@@ -207,6 +254,27 @@ export default function App() {
         />
         <EmotionPanel emotion={emotion} pipelineStatus={pipelineStatus} />
       </main>
+      
+      {/* HTTP 音频录制按钮 (WebRTC 替代方案) */}
+      <div style={{ 
+        borderTop: '1px solid rgba(80, 120, 160, 0.25)', 
+        background: 'rgba(8, 25, 41, 0.5)',
+        padding: '1rem 0'
+      }}>
+        <AudioRecordButton 
+          threadId={activeThreadId}
+          onResponse={(result) => {
+            console.log("Audio response received:", result);
+            // 可以在这里触发界面更新
+          }}
+          disabled={!activeThreadId}
+        />
+      </div>
+      
+      {/* 隐藏的音频元素用于播放远端音频 */}
+      <audio ref={remoteAudioRef} autoPlay style={{ display: "none" }} />
+      {/* 将 webrtcAudioRef 传递给底层 hook */}
+      <audio ref={webrtcAudioRef} autoPlay style={{ display: "none" }} />
     </div>
   );
 }
