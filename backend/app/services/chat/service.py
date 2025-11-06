@@ -10,7 +10,10 @@ from typing import Dict, Iterable, List, Optional
 
 from ...schemas import AgentMessage, ChatEvent, ChatMessage, ChatThreadOut, EmotionState
 from ..agent import ConversationalAgent
+from ..agent.llm import LLMService
+from ..agent.tts import TTSService
 from ..emotion.pipeline import EmotionPipeline
+from .storage import ChatStorage
 
 logger = logging.getLogger(__name__)
 
@@ -25,19 +28,43 @@ class ThreadRecord:
 
 
 class ChatService:
-    """In-memory chat thread and message management with agent integration."""
+    """Chat thread and message management with SQLite persistence and agent integration."""
 
     def __init__(
         self,
         agent: ConversationalAgent,
         pipeline: EmotionPipeline,
+        storage: Optional[ChatStorage] = None,
     ) -> None:
         self.agent = agent
         self.pipeline = pipeline
-        self._threads: Dict[str, ThreadRecord] = {}
-        self._messages: Dict[str, List[ChatMessage]] = {}
+        self.storage = storage or ChatStorage()
         self._listeners: set[asyncio.Queue[ChatEvent]] = set()
         self._lock = asyncio.Lock()
+        
+        # Load existing threads and messages from database
+        self._threads: Dict[str, ThreadRecord] = {}
+        self._messages: Dict[str, List[ChatMessage]] = {}
+        self._load_from_storage()
+    
+    def _load_from_storage(self):
+        """Load threads and messages from database on startup"""
+        threads = self.storage.list_threads()
+        for thread in threads:
+            record = ThreadRecord(
+                thread_id=thread.thread_id,
+                title=thread.title,
+                participants=thread.participants,
+                created_at=thread.created_at.timestamp(),
+                last_message_at=thread.last_message_at.timestamp(),
+            )
+            self._threads[thread.thread_id] = record
+            
+            # Load messages for this thread
+            messages = self.storage.get_messages(thread.thread_id)
+            self._messages[thread.thread_id] = messages
+        
+        logger.info(f"Loaded {len(self._threads)} threads and {sum(len(msgs) for msgs in self._messages.values())} messages from storage")
 
     async def create_thread(self, title: str, participants: Iterable[str]) -> ChatThreadOut:
         async with self._lock:
@@ -52,6 +79,15 @@ class ChatService:
             )
             self._threads[thread_id] = record
             self._messages[thread_id] = []
+            
+            # Save to database
+            self.storage.save_thread(
+                thread_id=thread_id,
+                title=title,
+                participants=list(participants),
+                created_at=now,
+                last_message_at=now,
+            )
         return self._to_thread_out(record)
 
     async def list_threads(self) -> List[ChatThreadOut]:
@@ -132,6 +168,11 @@ class ChatService:
             self._messages[thread_id].append(message)
             record = self._threads[thread_id]
             record.last_message_at = created_at.timestamp()
+            
+            # Save message to database
+            self.storage.save_message(message)
+            self.storage.update_thread_last_message(thread_id, created_at.timestamp())
+        
         await self._broadcast(ChatEvent(thread_id=thread_id, message=message))
         return message
 
@@ -146,20 +187,87 @@ class ChatService:
             emotion = emotion_hint or self.pipeline.latest_state
             logger.debug(f"Using emotion: {emotion.label if emotion else 'None'}")
             
-            agent_message = await self.agent.respond_with_context(
-                emotion,
-                user_text=user_text,
-            )
-            logger.info(f"Agent generated message: {agent_message.text[:50]}...")
+            # 创建一个临时消息用于流式更新
+            temp_message_id = uuid.uuid4().hex
+            created_at = datetime.utcnow()
+            response_text = ""
             
-            await self._append_message(
-                thread_id=thread_id,
-                role="agent",
-                text=agent_message.text,
-                language=agent_message.language,
-                emotion=emotion,
-                agent_message=agent_message,
-            )
+            # 构建 prompt（从 agent._build_prompt 逻辑复制）
+            voice_style = "balanced"
+            language = "zh"
+            mood_summary = f"当前情绪：{emotion.label if emotion else 'neutral'}，心境值 {emotion.mood_score if emotion else 0:.2f}"
+            
+            prompt_sections = [
+                "你是一位贴心的聊天搭子，根据用户当前情绪给出温暖、自然的回答，语言要口语化，适当使用 emoji，让对话轻松。",
+                mood_summary,
+            ]
+            
+            if user_text:
+                prompt_sections.append(f"用户最新消息：{user_text}")
+            
+            prompt_sections.append(f"语气偏向：{voice_style}")
+            prompt_sections.append(f"语言：{language}")
+            prompt_sections.append("请输出下一句回复，并紧扣上述信息。")
+            prompt = "\n".join(prompt_sections)
+            
+            # 流式生成 LLM 响应
+            llm_service = LLMService()
+            
+            async for chunk in llm_service.generate_stream(prompt):
+                response_text += chunk
+                
+                # 广播流式更新
+                await self._broadcast(ChatEvent(
+                    thread_id=thread_id,
+                    message=ChatMessage(
+                        message_id=temp_message_id,
+                        thread_id=thread_id,
+                        role="agent",
+                        text=response_text,
+                        created_at=created_at,
+                        language=language,
+                        emotion_label=emotion.label if emotion else None,
+                        emotion_score=emotion.mood_score if emotion else None,
+                    )
+                ))
+            
+            logger.info(f"Agent generated message: {response_text[:50]}...")
+            
+            # 生成 TTS（可选）
+            tts_service = TTSService()
+            audio_reference = None
+            try:
+                speech = await tts_service.synthesize(response_text, "zhichu_emo", language)
+                audio_reference = speech.audio_reference
+            except Exception as e:
+                logger.warning(f"TTS failed: {e}")
+            
+            # 保存最终消息到数据库（使用新的消息 ID）
+            final_message_id = uuid.uuid4().hex
+            async with self._lock:
+                message = ChatMessage(
+                    message_id=final_message_id,
+                    thread_id=thread_id,
+                    role="agent",
+                    text=response_text,
+                    created_at=created_at,
+                    language=language,
+                    emotion_label=emotion.label if emotion else None,
+                    emotion_score=emotion.mood_score if emotion else None,
+                    llm_provider=llm_service.provider.value,
+                    tts_provider="dashscope" if audio_reference else None,
+                    audio_reference=audio_reference,
+                )
+                self._messages[thread_id].append(message)
+                record = self._threads[thread_id]
+                record.last_message_at = created_at.timestamp()
+                
+                # 保存到数据库
+                self.storage.save_message(message)
+                self.storage.update_thread_last_message(thread_id, created_at.timestamp())
+            
+            # 广播最终消息（带新 ID）
+            await self._broadcast(ChatEvent(thread_id=thread_id, message=message))
             logger.info(f"Agent message appended to thread {thread_id}")
         except Exception as e:
             logger.exception(f"Agent follow-up failed for thread {thread_id}: {e}")

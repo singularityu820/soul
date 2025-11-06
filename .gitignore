@@ -20,3 +20,4 @@ docs/
 test*.*
 
 backend/storage/
+storage/

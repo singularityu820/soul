@@ -62,7 +62,7 @@ The backend exposes:
 - `DELETE /webrtc/{room}` – close active WebRTC session and release resources.
 - `WS /ws/webrtc/{room}` – subscribe to signaling updates in real time.
 
-### Front-end (React + Vite)
+### 3. 启动前端 (React + Vite)
 
 ```bash
 cd frontend

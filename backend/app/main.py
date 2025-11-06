@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import contextlib
 from contextlib import asynccontextmanager
@@ -57,6 +58,7 @@ from .services.emotion import (
 )
 from .services.realtime.webrtc import WebRTCSignalHub
 from .services.realtime.session import AgentWebRTCSession
+from .services.realtime.voice_stream import VoiceStreamHub, VoiceStreamSession
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -106,6 +108,8 @@ pipeline = EmotionPipeline(
 )
 chat_service = ChatService(agent=agent, pipeline=pipeline)
 webrtc_hub = WebRTCSignalHub()
+voice_stream_hub = VoiceStreamHub()
+
 # WebRTC 会话管理
 webrtc_sessions: dict[str, AgentWebRTCSession] = {}
 active_webrtc_sessions = 0
@@ -820,5 +824,177 @@ async def download_audio(reference: str) -> Response:
     except Exception as e:
         logger.error(f"Audio download failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"下载音频失败: {str(e)}")
+
+
+# ============================================================================
+# WebSocket 实时语音流接口
+# ============================================================================
+
+@app.websocket("/ws/voice-stream")
+async def voice_stream_endpoint(websocket: WebSocket):
+    """
+    实时语音流 WebSocket 端点
+    
+    客户端消息格式:
+    - JSON: {"type": "start", "session_id": "xxx", "thread_id": "xxx"}
+    - JSON: {"type": "stop"}
+    - Binary: 原始音频数据 (PCM 16bit 16kHz mono)
+    
+    服务端消息格式:
+    - JSON: {"type": "transcript", "text": "...", "is_final": true}
+    - JSON: {"type": "response", "text": "..."}
+    - JSON: {"type": "status", "status": "transcribing|generating|synthesizing"}
+    - JSON: {"type": "error", "message": "..."}
+    - Binary: TTS 音频数据
+    """
+    await websocket.accept()
+    session_id = None
+    session: Optional[VoiceStreamSession] = None
+    
+    try:
+        logger.info("Voice stream WebSocket connected")
+        
+        # 等待客户端发送 start 消息
+        data = await websocket.receive_json()
+        if data.get("type") != "start":
+            await websocket.send_json({"type": "error", "message": "Expected 'start' message"})
+            await websocket.close()
+            return
+        
+        session_id = data.get("session_id") or str(uuid.uuid4())
+        thread_id = data.get("thread_id")
+        
+        logger.info(f"Starting voice stream session: {session_id}, thread_id: {thread_id}")
+        
+        # 定义音频处理回调
+        async def on_transcript(audio_data: bytes) -> str:
+            """处理音频数据: ASR → LLM → TTS"""
+            try:
+                # 1. ASR 转录
+                transcript = await asr_service.transcribe(audio_data)
+                logger.info(f"Transcript: {transcript}")
+                
+                if not transcript or not transcript.strip():
+                    return ""
+                
+                # 发送转录结果
+                await session.send_transcript(transcript, is_final=True)
+                
+                # 2. LLM 生成响应 (流式)
+                await session.send_status("generating")
+                
+                # 构建提示词 (可选:包含上下文)
+                if thread_id:
+                    try:
+                        history_response = await httpx.AsyncClient().get(
+                            f"http://localhost:8000/chat/threads/{thread_id}/messages",
+                            timeout=5.0
+                        )
+                        if history_response.status_code == 200:
+                            history = history_response.json()
+                            context_messages = history[-5:] if len(history) > 5 else history
+                            context = "\n".join([
+                                f"{'用户' if msg.get('role') == 'user' else 'AI'}: {msg.get('content', '')}"
+                                for msg in context_messages
+                            ])
+                            prompt = f"{context}\n用户: {transcript}\nAI:"
+                        else:
+                            prompt = f"用户: {transcript}\nAI:"
+                    except:
+                        prompt = f"用户: {transcript}\nAI:"
+                else:
+                    prompt = f"用户: {transcript}\nAI:"
+                
+                # 流式生成响应
+                response_text = ""
+                async for chunk in llm_service.generate_stream(prompt=prompt, temperature=0.7):
+                    response_text += chunk
+                    # 发送流式响应片段
+                    await session.send_message("response_chunk", {"text": chunk})
+                
+                logger.info(f"Response complete: {response_text}")
+                
+                # 发送完整响应文本
+                await session.send_response(response_text)
+                
+                # 3. TTS 合成
+                await session.send_status("synthesizing")
+                
+                tts_result = await tts_service.synthesize(
+                    text=response_text,
+                    voice="zhichu_emo",
+                    locale="zh-CN",
+                )
+                
+                # 4. 发送音频
+                # 如果是 URL,需要下载
+                if tts_result.audio_reference.startswith("http"):
+                    async with httpx.AsyncClient() as client:
+                        audio_response = await client.get(tts_result.audio_reference)
+                        audio_data = audio_response.content
+                elif Path(tts_result.audio_reference).exists():
+                    with open(tts_result.audio_reference, "rb") as f:
+                        audio_data = f.read()
+                else:
+                    logger.warning(f"Could not resolve audio reference: {tts_result.audio_reference}")
+                    audio_data = b""
+                
+                if audio_data:
+                    await session.send_audio(audio_data)
+                    logger.info(f"Sent audio response: {len(audio_data)} bytes")
+                
+                await session.send_status("idle")
+                return response_text
+                
+            except Exception as e:
+                logger.error(f"Error in transcript callback: {e}", exc_info=True)
+                await session.send_error(str(e))
+                return ""
+        
+        # 创建会话
+        session = await voice_stream_hub.create_session(
+            websocket=websocket,
+            session_id=session_id,
+            on_transcript=on_transcript,
+        )
+        
+        # 发送就绪消息
+        await session.send_message("ready", {"session_id": session_id})
+        
+        # 接收音频流
+        while not session._closed:
+            message = await websocket.receive()
+            
+            if "bytes" in message:
+                # 二进制音频数据
+                audio_data = message["bytes"]
+                await session.handle_audio_data(audio_data)
+                
+            elif "text" in message:
+                # JSON 控制消息
+                data = json.loads(message["text"])
+                
+                if data.get("type") == "stop":
+                    logger.info("Received stop signal")
+                    break
+                    
+            else:
+                logger.warning(f"Unknown message type: {message}")
+        
+    except WebSocketDisconnect:
+        logger.info(f"Voice stream WebSocket disconnected: {session_id}")
+    except Exception as e:
+        logger.error(f"Voice stream error: {e}", exc_info=True)
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
+    finally:
+        if session_id:
+            await voice_stream_hub.remove_session(session_id)
+        try:
+            await websocket.close()
+        except:
+            pass
 
 

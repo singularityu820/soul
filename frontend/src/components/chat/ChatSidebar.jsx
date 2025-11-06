@@ -16,10 +16,7 @@ export default function ChatSidebar({ threads, activeThreadId, onSelectThread, o
   return (
     <aside className="chat-sidebar">
       <div className="chat-sidebar__header">
-        <h2>会话</h2>
-        <button type="button" onClick={onCreateThread} className="ghost-btn">
-          新建
-        </button>
+        <h2>主会话</h2>
       </div>
       <ul className="thread-list">
         {threads.map((thread) => {
@@ -38,7 +35,7 @@ export default function ChatSidebar({ threads, activeThreadId, onSelectThread, o
             </li>
           );
         })}
-        {threads.length === 0 && <li className="thread-empty">暂无会话，点击“新建”。</li>}
+        {threads.length === 0 && <li className="thread-empty">正在加载会话...</li>}
       </ul>
     </aside>
   );
