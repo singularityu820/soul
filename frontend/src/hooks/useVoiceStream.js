@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useAudioQueue } from "./useAudioQueue";
 
 /**
  * 实时语音流 Hook
@@ -6,8 +7,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
  * 使用 WebSocket 实现低延迟的语音对话:
  * - 实时音频采集和发送
  * - 实时接收 ASR 转录
- * - 实时接收 LLM 响应
- * - 实时播放 TTS 音频
+ * - 实时接收 LLM 响应（流式断句）
+ * - 音频队列播放（顺序播放多个 TTS 片段）
+ * - 支持打断机制
  */
 export function useVoiceStream() {
   const [isConnected, setIsConnected] = useState(false);
@@ -23,6 +25,9 @@ export function useVoiceStream() {
   const workletNodeRef = useRef(null);
   const sessionIdRef = useRef(null);
   const cleanupInitializedRef = useRef(false); // 防止 StrictMode 清理
+  
+  // 使用音频队列
+  const audioQueue = useAudioQueue();
 
   /**
    * 连接到 WebSocket 服务器
@@ -103,21 +108,9 @@ export function useVoiceStream() {
           // 连接建立后的正常消息处理
           if (isReady) {
             if (event.data instanceof ArrayBuffer) {
-              // 二进制音频数据 - 播放
-              try {
-                if (!audioContextRef.current) {
-                  audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                const audioContext = audioContextRef.current;
-                const audioBuffer = await audioContext.decodeAudioData(event.data);
-                const source = audioContext.createBufferSource();
-                source.buffer = audioBuffer;
-                source.connect(audioContext.destination);
-                source.start();
-                console.log("Playing audio response");
-              } catch (err) {
-                console.error("Failed to play audio:", err);
-              }
+              // ❌ 旧方案：直接播放二进制音频（已废弃）
+              // 现在后端发送音频 URL，不再发送二进制数据
+              console.warn('[AUDIO] Received binary audio (deprecated), ignoring');
             } else {
               // JSON 消息
               try {
@@ -134,11 +127,32 @@ export function useVoiceStream() {
                     break;
                   
                   case "response_chunk":
+                    // LLM 流式输出
                     setResponse((prev) => prev + message.text);
+                    break;
+                  
+                  case "tts_audio":
+                    // ⭐ 新方案：收到音频 URL，添加到队列
+                    console.log(`[AudioQueue] Received TTS audio #${message.segment_id}:`, message.url);
+                    audioQueue.enqueue(message.url, {
+                      segment_id: message.segment_id,
+                      text: message.text
+                    });
+                    break;
+                  
+                  case "generation_complete":
+                    // LLM 生成完成
+                    console.log(`[Voice Stream] Generation complete: ${message.segments} segments`);
+                    setStatus("idle");
                     break;
                   
                   case "status":
                     setStatus(message.status);
+                    break;
+                  
+                  case "audio_complete":
+                    // 兼容旧消息（已废弃）
+                    console.log(`[AUDIO] All ${message.segments} audio segments received (deprecated)`);
                     break;
                   
                   case "error":
@@ -157,7 +171,13 @@ export function useVoiceStream() {
         };
 
         ws.onerror = (error) => {
-          console.error("WebSocket error:", error);
+          console.error("[WS] WebSocket error:", error);
+          console.error("[WS] Error event details:", {
+            type: error.type,
+            target: error.target.readyState,
+            url: error.target.url
+          });
+          console.trace("[WS] Error stack trace");
           clearTimeout(timeout);
           if (!isReady) {
             reject(new Error("WebSocket 连接错误"));
@@ -166,8 +186,14 @@ export function useVoiceStream() {
           }
         };
 
-        ws.onclose = () => {
-          console.log("Voice stream WebSocket closed");
+        ws.onclose = (event) => {
+          console.log("[WS] Voice stream WebSocket closed");
+          console.log("[WS] Close event:", {
+            code: event.code,
+            reason: event.reason,
+            wasClean: event.wasClean
+          });
+          console.trace("[WS] Connection close stack trace");
           clearTimeout(timeout);
           setIsConnected(false);
           setIsRecording(false);
@@ -392,6 +418,9 @@ export function useVoiceStream() {
   const disconnect = useCallback(() => {
     // 停止录音
     stopRecording();
+    
+    // 清空音频队列
+    audioQueue.clear();
 
     // 关闭 WebSocket
     if (wsRef.current) {
@@ -421,7 +450,27 @@ export function useVoiceStream() {
     setIsConnected(false);
     sessionIdRef.current = null;
     console.log("Disconnected from voice stream");
-  }, [stopRecording]);
+  }, [stopRecording, audioQueue]);
+  
+  /**
+   * 打断 AI 说话（用户开始说话时）
+   */
+  const interrupt = useCallback(() => {
+    console.log('[Voice Stream] User interrupting AI');
+    
+    // 清空音频队列
+    audioQueue.clear();
+    
+    // 通知后端打断
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: "interrupt"
+      }));
+    }
+    
+    // 重置响应文本
+    setResponse("");
+  }, [audioQueue]);
 
   // 清理：仅在组件卸载时运行一次，避免因函数引用变化触发意外断开
   useEffect(() => {
@@ -447,11 +496,17 @@ export function useVoiceStream() {
     transcript,
     response,
     error,
+    
+    // 音频队列状态
+    audioQueueLength: audioQueue.queueLength,
+    isAudioPlaying: audioQueue.isPlaying,
+    currentAudio: audioQueue.currentAudio,
 
     // 操作
     connect,
     disconnect,
     startRecording,
     stopRecording,
+    interrupt, // 新增：打断功能
   };
 }

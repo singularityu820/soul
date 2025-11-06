@@ -883,7 +883,15 @@ async def voice_stream_endpoint(websocket: WebSocket):
                 # 2. LLM 生成响应 (流式)
                 await session.send_status("generating")
                 
-                # 构建提示词 (可选:包含上下文)
+                # 使用语音聊天专用的 system prompt
+                voice_system_prompt = llm_service.config.voice_chat_system_prompt
+                
+                # 构建消息列表
+                messages = [
+                    {"role": "system", "content": voice_system_prompt}
+                ]
+                
+                # 添加历史上下文（可选）
                 if thread_id:
                     try:
                         history_response = await httpx.AsyncClient().get(
@@ -892,59 +900,158 @@ async def voice_stream_endpoint(websocket: WebSocket):
                         )
                         if history_response.status_code == 200:
                             history = history_response.json()
-                            context_messages = history[-5:] if len(history) > 5 else history
-                            context = "\n".join([
-                                f"{'用户' if msg.get('role') == 'user' else 'AI'}: {msg.get('content', '')}"
-                                for msg in context_messages
-                            ])
-                            prompt = f"{context}\n用户: {transcript}\nAI:"
-                        else:
-                            prompt = f"用户: {transcript}\nAI:"
-                    except:
-                        prompt = f"用户: {transcript}\nAI:"
-                else:
-                    prompt = f"用户: {transcript}\nAI:"
+                            # 只取最近3轮对话作为上下文
+                            context_messages = history[-6:] if len(history) > 6 else history
+                            for msg in context_messages:
+                                role = "user" if msg.get('role') == 'user' else "assistant"
+                                content = msg.get('content', '')
+                                if content:
+                                    messages.append({"role": role, "content": content})
+                    except Exception as e:
+                        logger.warning(f"Failed to load history: {e}")
                 
-                # 流式生成响应
-                response_text = ""
-                async for chunk in llm_service.generate_stream(prompt=prompt, temperature=0.7):
-                    response_text += chunk
-                    # 发送流式响应片段
-                    await session.send_message("response_chunk", {"text": chunk})
+                # 添加当前用户输入
+                messages.append({"role": "user", "content": transcript})
                 
-                logger.info(f"Response complete: {response_text}")
+                # 2. LLM 流式生成 + 智能断句 + 立即 TTS
+                await session.send_status("generating")
                 
-                # 发送完整响应文本
-                await session.send_response(response_text)
+                # 断句缓冲区
+                sentence_buffer = []
+                full_response = ""
+                segment_count = 0
                 
-                # 3. TTS 合成
-                await session.send_status("synthesizing")
+                # 断句标点符号
+                BREAK_PUNCTUATION = {"。", "！", "？", "!", "?", "；", ";", "\n"}
+                MIN_SENTENCE_LENGTH = 12  # 最小断句长度
+                MAX_SENTENCE_LENGTH = 100  # 最大长度，超过强制断句
                 
-                tts_result = await tts_service.synthesize(
-                    text=response_text,
-                    voice="zhichu_emo",
-                    locale="zh-CN",
-                )
+                def should_break_sentence(text: str) -> bool:
+                    """判断是否应该断句"""
+                    if len(text) < MIN_SENTENCE_LENGTH:
+                        return False
+                    
+                    # 检查是否以断句标点结尾
+                    if text and text[-1] in BREAK_PUNCTUATION:
+                        return True
+                    
+                    # 检查特殊标记（语气、语言切换）
+                    if "<emotion:" in text or "<lang:" in text or "<voice:" in text:
+                        return True
+                    
+                    # 超长强制断句
+                    if len(text) >= MAX_SENTENCE_LENGTH:
+                        # 找最近的标点
+                        for i in range(len(text) - 1, max(0, len(text) - 20), -1):
+                            if text[i] in BREAK_PUNCTUATION:
+                                return True
+                        return True  # 实在没有标点就强制断
+                    
+                    return False
                 
-                # 4. 发送音频
-                # 如果是 URL,需要下载
-                if tts_result.audio_reference.startswith("http"):
-                    async with httpx.AsyncClient() as client:
-                        audio_response = await client.get(tts_result.audio_reference)
-                        audio_data = audio_response.content
-                elif Path(tts_result.audio_reference).exists():
-                    with open(tts_result.audio_reference, "rb") as f:
-                        audio_data = f.read()
-                else:
-                    logger.warning(f"Could not resolve audio reference: {tts_result.audio_reference}")
-                    audio_data = b""
+                async def process_sentence(sentence: str, seg_id: int):
+                    """处理一个句子：TTS + 发送"""
+                    try:
+                        logger.info(f"[Sentence {seg_id}] Processing: {sentence[:50]}...")
+                        
+                        # TTS 合成
+                        async for audio_url in tts_service.synthesize_stream(
+                            text=sentence,
+                            voice="zhichu_emo",
+                            locale="zh-CN",
+                        ):
+                            logger.info(f"[Sentence {seg_id}] TTS generated: {audio_url}")
+                            
+                            # 发送音频 URL（不是二进制数据）
+                            await session.send_message("tts_audio", {
+                                "url": audio_url,
+                                "segment_id": seg_id,
+                                "text": sentence
+                            })
+                            
+                    except Exception as e:
+                        logger.error(f"[Sentence {seg_id}] TTS failed: {e}", exc_info=True)
                 
-                if audio_data:
-                    await session.send_audio(audio_data)
-                    logger.info(f"Sent audio response: {len(audio_data)} bytes")
+                # 创建 keepalive 任务
+                keepalive_task = None
+                keepalive_running = True
+                keepalive_count = 0
+                
+                async def send_keepalive():
+                    """保持连接活跃"""
+                    nonlocal keepalive_count
+                    while keepalive_running:
+                        await asyncio.sleep(2)
+                        if keepalive_running:
+                            try:
+                                keepalive_count += 1
+                                await session.send_status("generating")
+                            except Exception as e:
+                                logger.warning(f"Keepalive failed: {e}")
+                                break
+                
+                try:
+                    keepalive_task = asyncio.create_task(send_keepalive())
+                    logger.info("[Voice Stream] Started LLM streaming with smart sentence breaking")
+                    
+                    # 流式接收 LLM 输出
+                    async for chunk in llm_service.generate_stream(
+                        prompt="",
+                        messages=messages,
+                        temperature=0.7
+                    ):
+                        sentence_buffer.append(chunk)
+                        full_response += chunk
+                        
+                        # 发送 LLM chunk 给前端（用于实时显示）
+                        await session.send_message("response_chunk", {"text": chunk})
+                        
+                        # 检查是否需要断句
+                        current_text = "".join(sentence_buffer)
+                        if should_break_sentence(current_text):
+                            segment_count += 1
+                            logger.info(f"[Voice Stream] Breaking sentence #{segment_count}: {current_text[:30]}...")
+                            
+                            # 立即处理这个句子（TTS + 发送）
+                            await process_sentence(current_text.strip(), segment_count)
+                            
+                            # 清空缓冲区
+                            sentence_buffer.clear()
+                    
+                    # 处理剩余的文本
+                    remaining_text = "".join(sentence_buffer).strip()
+                    if remaining_text:
+                        segment_count += 1
+                        logger.info(f"[Voice Stream] Processing remaining text as segment #{segment_count}")
+                        await process_sentence(remaining_text, segment_count)
+                    
+                    logger.info(f"[Voice Stream] LLM complete. Generated {segment_count} segments. Full response: {full_response[:100]}...")
+                    
+                    # 发送完整响应
+                    await session.send_response(full_response)
+                    
+                    # 发送完成标记
+                    await session.send_message("generation_complete", {
+                        "segments": segment_count,
+                        "total_text": full_response
+                    })
+                    
+                except Exception as e:
+                    logger.error(f"[Voice Stream] Error in LLM streaming: {e}", exc_info=True)
+                    await session.send_error(str(e))
+                finally:
+                    # 停止 keepalive
+                    keepalive_running = False
+                    if keepalive_task:
+                        keepalive_task.cancel()
+                        try:
+                            await keepalive_task
+                        except asyncio.CancelledError:
+                            pass
+                    logger.info(f"[Voice Stream] Stopped keepalive (sent {keepalive_count} pings)")
                 
                 await session.send_status("idle")
-                return response_text
+                return full_response
                 
             except Exception as e:
                 logger.error(f"Error in transcript callback: {e}", exc_info=True)

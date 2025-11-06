@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import AsyncIterator, Dict, List, Optional
 
 import httpx
 
@@ -147,10 +147,25 @@ class SoVITSTTSClient(BaseTTSClient):
 
         chunks = self._build_chunks(stripped, voice, locale)
         urls: List[str] = []
+        
+        import logging
+        logger = logging.getLogger(__name__)
+        
         async with self._lock:
             for chunk in chunks:
-                url = await self._request_chunk(chunk)
-                urls.append(url)
+                try:
+                    url = await self._request_chunk(chunk)
+                    urls.append(url)
+                except Exception as e:
+                    logger.error(f"Failed to synthesize chunk: {e}", exc_info=True)
+                    # 返回错误信息而不是中断整个流程
+                    return SynthesizedSpeech(
+                        provider=self.provider,
+                        voice=voice,
+                        locale=locale,
+                        audio_reference=f"error://{self.provider.value}/{str(e)}",
+                        segments=None,
+                    )
 
         audio_reference = urls[0] if urls else ""
         return SynthesizedSpeech(
@@ -160,6 +175,42 @@ class SoVITSTTSClient(BaseTTSClient):
             audio_reference=audio_reference,
             segments=urls or None,
         )
+    
+    async def synthesize_stream(self, text: str, voice: str, locale: str) -> AsyncIterator[str]:
+        """
+        流式合成 TTS 音频
+        
+        每生成一个音频片段就立即 yield 出来，而不是等待所有片段生成完毕。
+        这样可以减少首音延迟，用户能更快听到响应。
+        
+        Args:
+            text: 要合成的文本
+            voice: 语音模型
+            locale: 语言/地区
+            
+        Yields:
+            音频 URL，按生成顺序逐个返回
+        """
+        import logging
+        logger = logging.getLogger(__name__)
+        
+        stripped = text.strip()
+        if not stripped:
+            return
+        
+        chunks = self._build_chunks(stripped, voice, locale)
+        logger.info(f"TTS stream: synthesizing {len(chunks)} chunks")
+        
+        async with self._lock:
+            for i, chunk in enumerate(chunks):
+                try:
+                    logger.info(f"TTS stream: generating chunk {i+1}/{len(chunks)}")
+                    url = await self._request_chunk(chunk)
+                    yield url
+                except Exception as e:
+                    logger.error(f"TTS stream: failed to synthesize chunk {i+1}: {e}", exc_info=True)
+                    # 继续处理下一个片段，不中断整个流
+                    continue
 
     def _build_chunks(self, text: str, voice: str, locale: str) -> List[_TTSChunk]:
         cfg = self._config
@@ -236,14 +287,27 @@ class SoVITSTTSClient(BaseTTSClient):
     async def _request_chunk(self, chunk: _TTSChunk) -> str:
         payload = self._build_payload(chunk)
         headers = {"accept": "application/json", "Content-Type": "application/json"}
+        
+        import logging
+        import json
+        logger = logging.getLogger(__name__)
+        logger.info(f"TTS request to: {self._endpoint}/infer_single")
+        logger.info(f"TTS payload summary: text='{chunk.text[:50]}...', emotion='{chunk.emotion}', model='{self._config.sovits_model_name}'")
+        logger.info(f"TTS full payload: {json.dumps(payload, ensure_ascii=False, indent=2)}")
+        
         async with httpx.AsyncClient(timeout=self._timeout) as client:
             response = await client.post(f"{self._endpoint}/infer_single", headers=headers, json=payload)
-        if not response.ok:
-            response.raise_for_status()
+        
+        logger.info(f"TTS response status: {response.status_code}")
+        response.raise_for_status()
+        
         data = response.json()
+        logger.info(f"TTS response data keys: {list(data.keys())}")
+        logger.info(f"TTS response data: {data}")
+        
         audio_url = data.get("audio_url")
         if not audio_url:
-            raise ValueError("TTS response missing audio_url field.")
+            raise ValueError(f"TTS response missing audio_url field. Response: {data}")
         return self._normalize_audio_url(audio_url)
 
     def _build_payload(self, chunk: _TTSChunk) -> Dict[str, object]:
@@ -312,6 +376,35 @@ class TTSService:
     async def synthesize(self, text: str, voice: str, locale: str) -> SynthesizedSpeech:
         client = self.client()
         return await client.synthesize(text, voice, locale)
+    
+    async def synthesize_stream(self, text: str, voice: str, locale: str) -> AsyncIterator[str]:
+        """
+        流式合成 TTS 音频
+        
+        每生成一个音频片段就立即返回，用于实时语音对话场景。
+        
+        Args:
+            text: 要合成的文本
+            voice: 语音模型
+            locale: 语言/地区
+            
+        Yields:
+            音频 URL，按生成顺序逐个返回
+        """
+        client = self.client()
+        
+        # 只有 SoVITS 客户端支持流式合成
+        if isinstance(client, SoVITSTTSClient):
+            async for audio_url in client.synthesize_stream(text, voice, locale):
+                yield audio_url
+        else:
+            # 其他 TTS 客户端回退到批量模式
+            result = await client.synthesize(text, voice, locale)
+            if result.segments:
+                for segment in result.segments:
+                    yield segment
+            elif result.audio_reference:
+                yield result.audio_reference
 
     def _detect(self) -> TTSDetectionResult:
         config = self.config

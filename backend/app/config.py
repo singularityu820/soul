@@ -85,6 +85,20 @@ class LLMServiceConfig:
     allow_auto_detect: bool = True
     timeout_seconds: float = 20.0
     endpoint_overrides: Dict[LLMProvider, str] = field(default_factory=dict)
+    
+    # System prompts for different scenarios
+    default_system_prompt: str = "You are a supportive companion."
+    voice_chat_system_prompt: str = (
+        "你是一个温暖、友好的AI伙伴，正在通过语音和用户进行自然对话。\n"
+        "请注意：\n"
+        "1. 使用口语化、简洁的表达方式，就像朋友间的日常对话\n"
+        "2. 回复要简短自然，避免长篇大论（通常1-3句话即可）\n"
+        "3. 使用轻松、亲切的语气，可以适当使用emoji表达情感\n"
+        "4. 对用户的情绪保持敏感，给予适当的情感支持\n"
+        "5. 避免过于正式或书面化的语言\n"
+        "6. 可以问开放式问题来延续对话\n\n"
+        "记住：这是语音对话，要让用户感觉像是在和一个真实的朋友聊天。"
+    )
 
 
 @dataclass(slots=True)
@@ -93,14 +107,14 @@ class TTSServiceConfig:
     allow_auto_detect: bool = True
     timeout_seconds: float = 15.0
     voice_defaults: Dict[str, str] = field(default_factory=dict)
-    sovits_endpoint: str = ""
-    sovits_public_base: str = ""
+    sovits_endpoint: str = "http://3812f431.r24.cpolar.top"
+    sovits_public_base: str = "http://3812f431.r24.cpolar.top"
     sovits_app_key: str = ""
     sovits_download_url: str = ""
     sovits_version: str = "v2ProPlus"
-    sovits_model_name: str = "mari"
-    sovits_prompt_text_lang: str = "日语"
-    sovits_emotion: str = "普通"
+    sovits_model_name: str = "LePetitPrince"
+    sovits_prompt_text_lang: str = "中文"
+    sovits_emotion: str = "开心1"  # 尝试带数字的格式
     sovits_text_lang_default: str = "中文"
     sovits_text_lang_map: Dict[str, str] = field(
         default_factory=lambda: {"zh": "中文", "en": "英语", "ja": "日语"}
