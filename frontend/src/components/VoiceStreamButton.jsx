@@ -27,36 +27,27 @@ export default function VoiceStreamButton({ threadId, disabled }) {
 
   // 自动连接
   useEffect(() => {
-    console.log('🎯 [VOICE-DEBUG] VoiceStream useEffect triggered');
-    console.log('🎯 [VOICE-DEBUG] initializedRef.current:', initializedRef.current);
-    console.log('🎯 [VOICE-DEBUG] threadId:', threadId, 'disabled:', disabled);
-    
     // 防止 StrictMode 重复连接
     if (initializedRef.current) {
-      console.log('🔄 [VOICE-SKIP] VoiceStream already initialized, skipping second mount');
       return () => {
-        console.log('🔄 [VOICE-SKIP-CLEANUP] Empty cleanup for second mount');
+        // 空的 cleanup
       };
     }
     
     // 只在 threadId 变化或首次渲染时连接
     if (threadId && !disabled) {
-      console.log('✨ [VOICE-INIT] Setting initializedRef to true');
       initializedRef.current = true;
       currentThreadIdRef.current = threadId;
       connectionAttemptedRef.current = true;
       
-      console.log('🔌 [VOICE-CONNECT] Connecting to voice stream...');
       connect(threadId).catch((err) => {
-        console.error("❌ [VOICE-ERROR] Failed to connect:", err);
+        console.error("Failed to connect:", err);
         connectionAttemptedRef.current = false;
       });
     }
     
     return () => {
       // StrictMode 的测试卸载 - 不做任何清理
-      console.log('🧹 [VOICE-CLEANUP-FIRST] First mount cleanup (StrictMode test unmount)');
-      console.log('🧹 [VOICE-CLEANUP-FIRST] Intentionally NOT disconnecting');
     };
   }, [threadId, disabled, connect]);
 

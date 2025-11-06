@@ -425,24 +425,17 @@ export function useVoiceStream() {
 
   // 清理：仅在组件卸载时运行一次，避免因函数引用变化触发意外断开
   useEffect(() => {
-    console.log('🎯 [VOICE-HOOK-DEBUG] useVoiceStream cleanup useEffect triggered');
-    console.log('🎯 [VOICE-HOOK-DEBUG] cleanupInitializedRef.current:', cleanupInitializedRef.current);
-    
     // 防止 StrictMode 清理
     if (cleanupInitializedRef.current) {
-      console.log('🔄 [VOICE-HOOK-SKIP] Cleanup already initialized, skipping');
       return () => {
-        console.log('🔄 [VOICE-HOOK-SKIP-CLEANUP] Empty cleanup for second mount');
+        // 空的 cleanup
       };
     }
     
-    console.log('✨ [VOICE-HOOK-INIT] Setting cleanupInitializedRef to true');
     cleanupInitializedRef.current = true;
     
     return () => {
       // StrictMode 的测试卸载 - 不做任何清理
-      console.log('🧹 [VOICE-HOOK-CLEANUP-FIRST] First mount cleanup (StrictMode test unmount)');
-      console.log('🧹 [VOICE-HOOK-CLEANUP-FIRST] Intentionally NOT cleaning up WebSocket/Audio');
     };
   }, []);
 

@@ -65,40 +65,30 @@ export default function ChatApp() {
   }, [refreshThreads]);
 
   useEffect(() => {
-    console.log('🎯 [DEBUG] Pipeline useEffect triggered');
-    console.log('🎯 [DEBUG] pipelineInitializedRef.current:', pipelineInitializedRef.current);
-    console.log('🎯 [DEBUG] pipelineSocketRef.current:', pipelineSocketRef.current);
-    
     // 避免 StrictMode 双重挂载导致的重复连接
     if (pipelineInitializedRef.current) {
-      console.log('🔄 [SKIP] Pipeline WebSocket already initialized, skipping second mount');
       return () => {
         // 空的 cleanup - 不关闭 WebSocket，不重置 ref
-        console.log('🔄 [SKIP-CLEANUP] Empty cleanup for second mount (doing nothing)');
       };
     }
     
-    console.log('✨ [INIT] Setting pipelineInitializedRef to true (will persist across StrictMode remount)');
     pipelineInitializedRef.current = true;
     
     const url = makeWsUrl("/ws/pipeline");
-    console.log('🔌 [CONNECT] Creating pipeline WebSocket:', url);
     const socket = new WebSocket(url);
     pipelineSocketRef.current = socket;
-    console.log('🔌 [CONNECT] WebSocket created, readyState:', socket.readyState, '(0=CONNECTING)');
 
     socket.onopen = () => {
-      console.log('✅ [OPEN] Pipeline WebSocket connected successfully');
+      console.log('✅ Pipeline WebSocket connected');
       setPipelineStatus("connected");
     };
     socket.onclose = (event) => {
-      console.log('❌ [CLOSE] Pipeline WebSocket closed - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
+      console.log('Pipeline WebSocket closed');
       setPipelineStatus("disconnected");
       pipelineSocketRef.current = null;
     };
     socket.onerror = (error) => {
-      console.error('❌ [ERROR] Pipeline WebSocket error:', error);
-      console.error('❌ [ERROR] Socket readyState:', socket.readyState, '(3=CLOSED, 2=CLOSING, 1=OPEN, 0=CONNECTING)');
+      console.error('Pipeline WebSocket error:', error);
       setPipelineStatus("error");
     };
     socket.onmessage = (message) => {
@@ -111,11 +101,8 @@ export default function ChatApp() {
     };
 
     return () => {
-      // 这是 StrictMode 的测试卸载 - 不做任何清理
+      // StrictMode 的测试卸载 - 不做任何清理
       // ref 保持 true，这样第二次挂载会跳过连接
-      console.log('🧹 [CLEANUP-FIRST] First mount cleanup (StrictMode test unmount)');
-      console.log('🧹 [CLEANUP-FIRST] Intentionally NOT closing WebSocket or resetting ref');
-      console.log('🧹 [CLEANUP-FIRST] This allows the connection to complete and second mount to skip');
     };
   }, []);
 
