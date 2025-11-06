@@ -134,8 +134,10 @@ class AgentWebRTCSession:
         # Agent 视频轨道（用于视频通话模式下推送占位画面）
         self._agent_video_track: Optional[AgentVideoTrack] = None
         if self._mode == "video":
-            self._agent_video_track = AgentVideoTrack()
+            logger.info("Creating video track for video mode in room %s", room_id)
+            self._agent_video_track = AgentVideoTrack(width=640, height=480, fps=30)
             self._pc.addTrack(self._agent_video_track)
+            logger.info("Video track added to peer connection for room %s", room_id)
 
         # 接收的音频轨道
         self._incoming_audio_track: Optional[MediaStreamTrack] = None
@@ -149,6 +151,11 @@ class AgentWebRTCSession:
         self._max_buffer_interval = 1.0
         self._last_dispatch_time = time.monotonic()
         self._recording_task: Optional[asyncio.Task] = None
+        
+        # 视频处理配置
+        self._video_task: Optional[asyncio.Task] = None
+        self._last_emotion_detection_time = 0.0
+        self._emotion_detection_interval = 0.01  # 每0.5秒检测一次情绪
         self._frames_logged = 0
         self._pending_remote_candidates: Deque[WebRTCCandidate] = deque()
         self._resampler: Optional[AudioResampler] = None
@@ -164,14 +171,19 @@ class AgentWebRTCSession:
 
         @self._pc.on("track")
         async def on_track(track: MediaStreamTrack) -> None:
-            logger.info("Received %s track from peer", track.kind)
+            logger.info("Received %s track from peer for room %s", track.kind, self.room_id)
             if track.kind == "audio":
                 self._incoming_audio_track = track
                 # 启动音频接收任务
                 self._recording_task = asyncio.create_task(self._receive_audio(track))
+                logger.info("Started audio receiving task for room %s", self.room_id)
             elif track.kind == "video":
                 self._incoming_video_track = track
-                logger.debug("Video track received for room %s", self.room_id)
+                logger.info("Video track received for room %s", self.room_id)
+                # 启动视频处理任务
+                if self._video_task is None:
+                    self._video_task = asyncio.create_task(self._process_video_loop())
+                    logger.info("Started video processing task for room %s", self.room_id)
 
         @self._pc.on("connectionstatechange")
         async def on_connectionstatechange() -> None:
@@ -204,6 +216,66 @@ class AgentWebRTCSession:
                     username_fragment=candidate.usernameFragment,
                 )
                 await self._on_local_candidate(model)
+
+    async def _start_recording(self):
+        """Start recording audio from the incoming track."""
+        if self._recording_task is not None:
+            return
+        
+        self._recording_task = asyncio.create_task(self._record_audio_loop())
+        self._video_task = asyncio.create_task(self._process_video_loop())
+        logger.info("Started audio and video processing loops")
+
+    async def _process_video_loop(self):
+        """Process video frames from the incoming video track."""
+        if not self._incoming_video_track:
+            logger.warning("No incoming video track available for room %s", self.room_id)
+            return
+            
+        logger.info("Starting video processing loop for room %s", self.room_id)
+        frame_count = 0
+        
+        try:
+            while True:
+                try:
+                    frame = await self._incoming_video_track.recv()
+                    frame_count += 1
+                    
+                    # 每30帧记录一次日志
+                    if frame_count % 30 == 0:
+                        logger.debug(
+                            "Processed %d video frames for room %s (resolution: %dx%d)",
+                            frame_count,
+                            self.room_id,
+                            frame.width,
+                            frame.height
+                        )
+                    
+                    # 情绪检测逻辑（每3秒一次）
+                    now = time.time()
+                    if now - self._last_emotion_detection_time >= self._emotion_detection_interval:
+                        self._last_emotion_detection_time = now
+                        
+                        # 将视频帧转换为字节数据，用于情绪检测
+                        frame_array = frame.to_ndarray(format="rgb24")
+                        
+                        # 调用情绪检测服务
+                        from ...services.emotion import pipeline
+                        emotion_result = await pipeline.face_tool.detect_from_frame(frame_array)
+                        
+                        if emotion_result:
+                            logger.info("Detected emotion: %s for room %s", emotion_result, self.room_id)
+                            
+                            # 使用新的方法更新面部情绪观察数据
+                            await pipeline.update_face_observation_from_frame(emotion_result)
+                        
+                except Exception as e:
+                    logger.error("Error processing video frame for room %s: %s", self.room_id, e)
+                    break
+        except asyncio.CancelledError:
+            logger.info("Video processing loop cancelled for room %s", self.room_id)
+        finally:
+            logger.info("Video processing loop ended for room %s after processing %d frames", self.room_id, frame_count)
 
     async def _receive_audio(self, track: MediaStreamTrack) -> None:
         """
@@ -363,17 +435,24 @@ class AgentWebRTCSession:
         """
         await self._agent_audio_track.push_audio(audio_bytes)
 
+    async def stop_recording(self):
+        """Stop recording audio and processing video."""
+        if self._recording_task is not None:
+            self._recording_task.cancel()
+            self._recording_task = None
+        
+        if self._video_task is not None:
+            self._video_task.cancel()
+            self._video_task = None
+            
+        logger.info("Stopped recording audio and processing video for room: %s", self.room_id)
+
     async def close(self) -> None:
         """关闭 WebRTC 连接和资源"""
         logger.info("Closing WebRTC session for room: %s", self.room_id)
 
-        # 停止录音任务
-        if self._recording_task and not self._recording_task.done():
-            self._recording_task.cancel()
-            try:
-                await self._recording_task
-            except asyncio.CancelledError:
-                pass
+        # 停止录音和视频处理任务
+        await self.stop_recording()
 
         # 停止音频轨道
         if self._agent_audio_track:
@@ -401,21 +480,28 @@ class AgentVideoTrack(VideoStreamTrack):
 
     kind = "video"
 
-    def __init__(self, width: int = 640, height: int = 360, fps: int = 20) -> None:
+    def __init__(self, width: int = 640, height: int = 480, fps: int = 30) -> None:
         super().__init__()
         self._width = width
         self._height = height
         self._fps = max(1, fps)
         self._frame_interval = 1 / self._fps
         self._start = time.time()
+        self._frame_count = 0
+        logger.info("AgentVideoTrack initialized: %dx%d @ %dfps", width, height, fps)
 
     async def recv(self) -> VideoFrame:
         await asyncio.sleep(self._frame_interval)
         pts, time_base = await self.next_timestamp()
 
         elapsed = time.time() - self._start
+        self._frame_count += 1
+        
+        # 创建动态渐变背景
         gradient = np.linspace(0, 255, self._width, dtype=np.uint8)
         band = np.tile(gradient, (self._height, 1))
+        
+        # 动态颜色变化
         red = (np.sin(elapsed) + 1.0) * 127.0
         green = (np.cos(elapsed * 0.6) + 1.0) * 127.0
         blue = (np.sin(elapsed * 1.3 + math.pi / 4) + 1.0) * 127.0
@@ -429,7 +515,17 @@ class AgentVideoTrack(VideoStreamTrack):
             axis=2,
         )
 
+        # 添加文本信息
         frame = VideoFrame.from_ndarray(frame_array, format="bgr24")
         frame.pts = pts
         frame.time_base = time_base
+        
+        # 每30帧记录一次日志
+        if self._frame_count % 30 == 0:
+            logger.debug(
+                "Generated video frame %d for AgentVideoTrack (elapsed: %.2fs)",
+                self._frame_count,
+                elapsed
+            )
+            
         return frame

@@ -3,10 +3,9 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import AsyncIterator, Dict, Optional
+from typing import Dict, Optional
 
 import httpx
-from openai import AsyncOpenAI
 
 from ...config import LLMProvider, LLMServiceConfig
 
@@ -26,10 +25,6 @@ class BaseLLMClient:
 
     async def generate(self, prompt: str, **kwargs: object) -> str:
         raise NotImplementedError
-    
-    async def generate_stream(self, prompt: str, **kwargs: object) -> AsyncIterator[str]:
-        """Generate response in streaming mode, yielding chunks"""
-        raise NotImplementedError
 
 
 class SandboxLLMClient(BaseLLMClient):
@@ -39,14 +34,6 @@ class SandboxLLMClient(BaseLLMClient):
     async def generate(self, prompt: str, **kwargs: object) -> str:
         tail = prompt[-160:].replace("\n", " ")
         return f"[{self.provider.value}] 占位回复：{tail or '...' }"
-    
-    async def generate_stream(self, prompt: str, **kwargs: object) -> AsyncIterator[str]:
-        """Simulate streaming by yielding parts of the response"""
-        response = await self.generate(prompt, **kwargs)
-        # Split into chunks for streaming simulation
-        chunk_size = 5
-        for i in range(0, len(response), chunk_size):
-            yield response[i:i + chunk_size]
 
 
 class RemoteLLMClient(BaseLLMClient):
@@ -61,97 +48,42 @@ class RemoteLLMClient(BaseLLMClient):
         self.endpoint = endpoint
         self.api_key = api_key
         self.timeout = timeout
-        self._openai_client: Optional[AsyncOpenAI] = None
-    
-    def _get_openai_client(self) -> AsyncOpenAI:
-        """Get or create OpenAI client"""
-        if self._openai_client is None:
-            # Extract base_url from endpoint (remove /chat/completions suffix)
-            base_url = self.endpoint
-            if base_url.endswith("/chat/completions"):
-                base_url = base_url[:-len("/chat/completions")]
-            
-            self._openai_client = AsyncOpenAI(
-                api_key=self.api_key or "dummy",
-                base_url=base_url,
-                timeout=self.timeout,
-            )
-        return self._openai_client
 
     async def generate(self, prompt: str, **kwargs: object) -> str:
         if not self.api_key:
             return f"[{self.provider.value}] 未配置 API 密钥，使用占位回复。"
+        headers: Dict[str, str] = {"Authorization": f"Bearer {self.api_key}"}
         
-        try:
-            client = self._get_openai_client()
-            
-            # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
-            default_model = os.getenv("LLM_MODEL_ID", "default")
-            model = kwargs.get("model", default_model)
-            
-            messages = kwargs.get(
+        # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
+        default_model = os.getenv("LLM_MODEL_ID", "default")
+        model = kwargs.get("model", default_model)
+        
+        payload = {
+            "model": model,
+            "messages": kwargs.get(
                 "messages",
                 [
                     {"role": "system", "content": "You are a supportive companion."},
                     {"role": "user", "content": prompt},
                 ],
-            )
-            
-            response = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                stream=False,
-            )
-            
-            content = response.choices[0].message.content
-            if content:
-                return content
-            
-        except Exception as e:
-            logger.warning(f"LLM error: {e}")
+            ),
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(self.endpoint, headers=headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+                content = (
+                    data.get("choices", [{}])[0]
+                    .get("message", {})
+                    .get("content")
+                )
+                if content:
+                    return content
+        except httpx.HTTPError as e:
+            logger.warning(f"LLM HTTP error: {e}")
             return f"[{self.provider.value}] 接口不可用，使用占位回复。"
-        
         return f"[{self.provider.value}] 未返回内容。"
-    
-    async def generate_stream(self, prompt: str, **kwargs: object) -> AsyncIterator[str]:
-        """Generate response in streaming mode using OpenAI SDK"""
-        if not self.api_key:
-            yield f"[{self.provider.value}] 未配置 API 密钥，使用占位回复。"
-            return
-        
-        try:
-            client = self._get_openai_client()
-            
-            default_model = os.getenv("LLM_MODEL_ID", "default")
-            model = kwargs.get("model", default_model)
-            
-            messages = kwargs.get(
-                "messages",
-                [
-                    {"role": "system", "content": "You are a supportive companion."},
-                    {"role": "user", "content": prompt},
-                ],
-            )
-            
-            # Create streaming completion
-            stream = await client.chat.completions.create(
-                model=model,
-                messages=messages,
-                stream=True,
-                stream_options={"include_usage": True},  # Include usage stats
-            )
-            
-            # Iterate over stream chunks
-            async for chunk in stream:
-                # Extract content delta from chunk
-                if chunk.choices and len(chunk.choices) > 0:
-                    delta = chunk.choices[0].delta
-                    if delta.content:
-                        yield delta.content
-                        
-        except Exception as e:
-            logger.warning(f"LLM streaming error: {e}")
-            yield f"[{self.provider.value}] 流式接口不可用。"
 
 
 class LLMService:
@@ -194,17 +126,6 @@ class LLMService:
             return response
         except Exception as e:
             logger.exception(f"LLM generation error: {e}")
-            raise
-    
-    async def generate_stream(self, prompt: str, **kwargs: object) -> AsyncIterator[str]:
-        """Generate response in streaming mode"""
-        client = self.client()
-        logger.info(f"Generating streaming response with LLM provider: {client.provider.value}")
-        try:
-            async for chunk in client.generate_stream(prompt, **kwargs):
-                yield chunk
-        except Exception as e:
-            logger.exception(f"LLM streaming generation error: {e}")
             raise
 
     async def generate_stream(
