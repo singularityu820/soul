@@ -965,6 +965,11 @@ async def voice_stream_endpoint(websocket: WebSocket):
         while not session._closed:
             message = await websocket.receive()
             
+            # 检查断开连接消息
+            if message.get("type") == "websocket.disconnect":
+                logger.info(f"Client disconnected: {session_id}")
+                break
+            
             if "bytes" in message:
                 # 二进制音频数据
                 audio_data = message["bytes"]
@@ -983,6 +988,12 @@ async def voice_stream_endpoint(websocket: WebSocket):
         
     except WebSocketDisconnect:
         logger.info(f"Voice stream WebSocket disconnected: {session_id}")
+    except RuntimeError as e:
+        # 处理 "Cannot call receive once a disconnect message has been received" 错误
+        if "disconnect" in str(e).lower():
+            logger.info(f"Voice stream connection closed: {session_id}")
+        else:
+            logger.error(f"Voice stream runtime error: {e}", exc_info=True)
     except Exception as e:
         logger.error(f"Voice stream error: {e}", exc_info=True)
         try:

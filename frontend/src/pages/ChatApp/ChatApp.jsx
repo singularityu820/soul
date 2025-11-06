@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AvatarCanvas from "../../components/AvatarCanvas.jsx";
-import ChatSidebar from "../../components/chat/ChatSidebar.jsx";
 import ChatWindow from "../../components/chat/ChatWindow.jsx";
 import EmotionPanel from "../../components/chat/EmotionPanel.jsx";
 import "./styles/index.css";
@@ -9,7 +8,8 @@ const API_PREFIX = "/api";
 
 const makeWsUrl = (path) => {
   const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  const { host } = window.location;
+  // 开发环境直接连接到后端端口
+  const host = import.meta.env.DEV ? "localhost:8000" : window.location.host;
   return `${protocol}://${host}${path}`;
 };
 
@@ -21,10 +21,11 @@ export default function ChatApp() {
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
-  const [callStatus, setCallStatus] = useState(null);
 
   const chatSocketRef = useRef(null);
   const messageIdsRef = useRef(new Set());
+  const pipelineSocketRef = useRef(null);
+  const pipelineInitializedRef = useRef(false); // 跟踪是否已初始化
 
   const emotion = pipelineEvent?.emotion ?? null;
   const avatarPose = pipelineEvent?.avatar ?? null;
@@ -64,12 +65,42 @@ export default function ChatApp() {
   }, [refreshThreads]);
 
   useEffect(() => {
+    console.log('🎯 [DEBUG] Pipeline useEffect triggered');
+    console.log('🎯 [DEBUG] pipelineInitializedRef.current:', pipelineInitializedRef.current);
+    console.log('🎯 [DEBUG] pipelineSocketRef.current:', pipelineSocketRef.current);
+    
+    // 避免 StrictMode 双重挂载导致的重复连接
+    if (pipelineInitializedRef.current) {
+      console.log('🔄 [SKIP] Pipeline WebSocket already initialized, skipping second mount');
+      return () => {
+        // 空的 cleanup - 不关闭 WebSocket，不重置 ref
+        console.log('🔄 [SKIP-CLEANUP] Empty cleanup for second mount (doing nothing)');
+      };
+    }
+    
+    console.log('✨ [INIT] Setting pipelineInitializedRef to true (will persist across StrictMode remount)');
+    pipelineInitializedRef.current = true;
+    
     const url = makeWsUrl("/ws/pipeline");
+    console.log('🔌 [CONNECT] Creating pipeline WebSocket:', url);
     const socket = new WebSocket(url);
+    pipelineSocketRef.current = socket;
+    console.log('🔌 [CONNECT] WebSocket created, readyState:', socket.readyState, '(0=CONNECTING)');
 
-    socket.onopen = () => setPipelineStatus("connected");
-    socket.onclose = () => setPipelineStatus("disconnected");
-    socket.onerror = () => setPipelineStatus("error");
+    socket.onopen = () => {
+      console.log('✅ [OPEN] Pipeline WebSocket connected successfully');
+      setPipelineStatus("connected");
+    };
+    socket.onclose = (event) => {
+      console.log('❌ [CLOSE] Pipeline WebSocket closed - code:', event.code, 'reason:', event.reason, 'wasClean:', event.wasClean);
+      setPipelineStatus("disconnected");
+      pipelineSocketRef.current = null;
+    };
+    socket.onerror = (error) => {
+      console.error('❌ [ERROR] Pipeline WebSocket error:', error);
+      console.error('❌ [ERROR] Socket readyState:', socket.readyState, '(3=CLOSED, 2=CLOSING, 1=OPEN, 0=CONNECTING)');
+      setPipelineStatus("error");
+    };
     socket.onmessage = (message) => {
       try {
         const payload = JSON.parse(message.data);
@@ -79,7 +110,13 @@ export default function ChatApp() {
       }
     };
 
-    return () => socket.close();
+    return () => {
+      // 这是 StrictMode 的测试卸载 - 不做任何清理
+      // ref 保持 true，这样第二次挂载会跳过连接
+      console.log('🧹 [CLEANUP-FIRST] First mount cleanup (StrictMode test unmount)');
+      console.log('🧹 [CLEANUP-FIRST] Intentionally NOT closing WebSocket or resetting ref');
+      console.log('🧹 [CLEANUP-FIRST] This allows the connection to complete and second mount to skip');
+    };
   }, []);
 
   useEffect(() => {
@@ -88,6 +125,24 @@ export default function ChatApp() {
     setMessages([]);
     messageIdsRef.current = new Set();
     setMessagesLoading(true);
+
+    // 加载历史消息
+    const loadHistory = async () => {
+      try {
+        const response = await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages?limit=100`);
+        if (response.ok) {
+          const history = await response.json();
+          setMessages(history);
+          history.forEach(msg => messageIdsRef.current.add(msg.message_id));
+        }
+      } catch (error) {
+        console.error("Failed to load message history", error);
+      } finally {
+        setMessagesLoading(false);
+      }
+    };
+
+    loadHistory();
 
     const url = makeWsUrl(`/ws/chat?thread_id=${activeThreadId}`);
     const socket = new WebSocket(url);
@@ -102,13 +157,24 @@ export default function ChatApp() {
         if (payload.type !== "message") return;
         const { message } = payload;
         if (message.thread_id !== activeThreadId) return;
-        if (messageIdsRef.current.has(message.message_id)) return;
-        messageIdsRef.current.add(message.message_id);
-        setMessages((prev) => [...prev, message].sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
+        
+        // 对于流式更新:如果消息 ID 已存在,则更新该消息而不是追加新消息
+        setMessages((prev) => {
+          const existingIndex = prev.findIndex(m => m.message_id === message.message_id);
+          if (existingIndex !== -1) {
+            // 更新现有消息（流式更新）
+            const updated = [...prev];
+            updated[existingIndex] = message;
+            return updated;
+          } else {
+            // 添加新消息
+            if (messageIdsRef.current.has(message.message_id)) return prev;
+            messageIdsRef.current.add(message.message_id);
+            return [...prev, message].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          }
+        });
       } catch (error) {
         console.error("Failed to parse chat event", error);
-      } finally {
-        setMessagesLoading(false);
       }
     };
 
@@ -153,32 +219,6 @@ export default function ChatApp() {
     }
   }, [threads.length]);
 
-  const handleCallAction = useCallback(
-    async (mode) => {
-      if (!activeThreadId) {
-        setCallStatus({ mode, message: "请选择会话后再发起通话" });
-        return;
-      }
-      const roomId = `${activeThreadId}-${mode}`;
-      setCallStatus({ mode, message: "正在建立信令连接…" });
-      try {
-        await fetch(`${API_PREFIX}/webrtc/${roomId}/offer`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sdp: `${mode}-placeholder-${Date.now()}`,
-            metadata: { initiator: "user" },
-          }),
-        });
-        setCallStatus({ mode, message: "等待对端加入（占位模式）" });
-      } catch (error) {
-        console.error("Failed to publish WebRTC offer", error);
-        setCallStatus({ mode, message: "信令未就绪，请稍后重试" });
-      }
-    },
-    [activeThreadId]
-  );
-
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -192,19 +232,12 @@ export default function ChatApp() {
         </div>
       </header>
       <main className="messenger-layout">
-        {/* <ChatSidebar
-          threads={threads}
-          activeThreadId={activeThreadId}
-          onSelectThread={setActiveThreadId}
-          onCreateThread={handleCreateThread}
-        /> */}
         <ChatWindow
           thread={activeThread}
+          threadId={activeThreadId}
           messages={messages}
           loading={messagesLoading && chatStatus === "connecting"}
           onSend={handleSendMessage}
-          callStatus={callStatus}
-          onCallAction={handleCallAction}
         />
         <EmotionPanel emotion={emotion} pipelineStatus={pipelineStatus} />
       </main>
