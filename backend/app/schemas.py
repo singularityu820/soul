@@ -13,7 +13,11 @@ class EEGWaveform(BaseModel):
 
 
 class ChannelEmotion(BaseModel):
+<<<<<<< HEAD
     source: Literal["eeg", "face", "speech", "fusion"]
+=======
+    source: Literal["eeg", "face", "fusion"]
+>>>>>>> origin/main
     label: str
     confidence: float = Field(ge=0.0, le=1.0)
     mood_score: float = Field(ge=-1.0, le=1.0)
@@ -46,6 +50,10 @@ class AgentMessage(BaseModel):
     tts_provider: Optional[str] = None
     audio_reference: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+<<<<<<< HEAD
+=======
+    audio_segments: Optional[List[str]] = None
+>>>>>>> origin/main
 
 
 class PipelineEvent(BaseModel):
@@ -75,6 +83,10 @@ class ChatMessage(BaseModel):
     llm_provider: Optional[str] = None
     tts_provider: Optional[str] = None
     audio_reference: Optional[str] = None
+<<<<<<< HEAD
+=======
+    audio_segments: Optional[List[str]] = None
+>>>>>>> origin/main
 
 
 class ChatMessageIn(BaseModel):
@@ -136,6 +148,10 @@ class MemoryRecordOut(BaseModel):
     text: str
     timestamp: datetime
     tags: List[str]
+<<<<<<< HEAD
+=======
+    importance: float = Field(default=0.5, ge=0.0, le=1.0)
+>>>>>>> origin/main
 
 
 class MemorySnapshotOut(BaseModel):

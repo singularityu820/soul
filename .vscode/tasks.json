@@ -10,6 +10,11 @@
         "uvicorn",
         "app.main:app",
         "--reload",
+<<<<<<< HEAD
+=======
+        "--host",
+        "0.0.0.0",
+>>>>>>> origin/main
         "--port",
         "8000",
         "--app-dir",

@@ -109,6 +109,29 @@ class DocumentStore:
             for row in rows
         ]
 
+<<<<<<< HEAD
+=======
+    def get(self, collection: str, record_id: str) -> Optional[DocumentRecord]:
+        with self._connect() as conn:
+            row = conn.execute(
+                """
+                SELECT record_id, content, metadata, created_at
+                FROM documents
+                WHERE collection = ? AND record_id = ?
+                LIMIT 1
+                """,
+                (collection, record_id),
+            ).fetchone()
+        if not row:
+            return None
+        return DocumentRecord(
+            record_id=row[0],
+            content=row[1],
+            metadata=json.loads(row[2]),
+            created_at=datetime.fromisoformat(row[3]),
+        )
+
+>>>>>>> origin/main
     def count(self, collection: str) -> int:
         with self._connect() as conn:
             row = conn.execute(
@@ -117,6 +140,39 @@ class DocumentStore:
             ).fetchone()
         return int(row[0]) if row else 0
 
+<<<<<<< HEAD
+=======
+    def list_all(self, collection: str) -> List[DocumentRecord]:
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT record_id, content, metadata, created_at
+                FROM documents
+                WHERE collection = ?
+                ORDER BY datetime(created_at) DESC
+                """,
+                (collection,),
+            ).fetchall()
+        return [
+            DocumentRecord(
+                record_id=row[0],
+                content=row[1],
+                metadata=json.loads(row[2]),
+                created_at=datetime.fromisoformat(row[3]),
+            )
+            for row in rows
+        ]
+
+    def delete(self, collection: str, record_id: str) -> bool:
+        with self._connect() as conn:
+            cursor = conn.execute(
+                "DELETE FROM documents WHERE collection = ? AND record_id = ?",
+                (collection, record_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+>>>>>>> origin/main
     def delete_collection(self, collection: str) -> None:
         with self._connect() as conn:
             conn.execute("DELETE FROM documents WHERE collection = ?", (collection,))

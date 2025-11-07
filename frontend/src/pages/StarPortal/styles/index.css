@@ -1,0 +1,129 @@
+.portal-root {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
+.portal-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(1.05) brightness(0.9);
+}
+
+.portal-content {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+}
+
+.portal-header-slot {
+  align-self: center;
+  justify-self: center;
+  width: min(92vw, 720px);
+  min-height: 120px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.portal-planet-slot {
+  position: absolute;
+  left: 50%;
+  bottom: 12vh;
+  transform: translateX(-50%);
+  width: min(68vw, 420px);
+  aspect-ratio: 1 / 1;
+  border-radius: 999px;
+  background: radial-gradient(50% 50% at 50% 40%, rgba(56, 189, 248, 0.25), rgba(2, 6, 11, 0.1));
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  box-shadow: 0 20px 60px rgba(2, 132, 199, 0.35), inset 0 0 40px rgba(56, 189, 248, 0.15);
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+}
+
+@media (min-width: 768px) {
+  .portal-planet-slot {
+    bottom: 10vh;
+    width: min(52vw, 520px);
+  }
+}
+
+.portal-star {
+  width: 60px;
+  height: 60px;
+  cursor: pointer;
+}
+
+.portal-moon {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-width: 100%;
+  min-height: 100%;
+  object-fit: cover;
+  object-position: center;
+  display: block;
+  transform: scale(1.5);
+}
+
+.portal-prince-container {
+  position: absolute;
+  left: 50%;
+  bottom: 12vh;
+  transform: translateX(-50%) translateY(-60%);
+  width: min(68vw, 420px);
+  aspect-ratio: 1 / 1;
+  cursor: pointer;
+  z-index: 2;
+}
+
+.portal-prince-video {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+
+.portal-prince-canvas {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  pointer-events: auto;
+  image-rendering: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+@media (min-width: 768px) {
+  .portal-prince-container {
+    bottom: 10vh;
+    width: min(52vw, 520px);
+  }
+}
+
+.portal-video-toggle {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(10, 24, 38, 0.7);
+  color: #e5edff;
+  cursor: pointer;
+}
+
+/* 弹层 */
+/* 弹框样式已迁移至全局 UI 组件：components/ui/Modal.css */

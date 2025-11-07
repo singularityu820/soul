@@ -21,7 +21,11 @@ export default function AvatarCanvas({ pose }) {
         <span>表情：{state.expression}</span>
         <span>姿态：{state.pose}</span>
         <span>能量：{energyPercent}%</span>
+<<<<<<< HEAD
         {state.emphasis && <span>提示：{state.emphasis}</span>}
+=======
+        <span>提示：{state.emphasis ?? '无'}</span>
+>>>>>>> origin/main
       </div>
     </div>
   );

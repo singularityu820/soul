@@ -3,7 +3,10 @@ import PropTypes from "prop-types";
 export default function CallControls({ status, onAction }) {
   const buttons = [
     { id: "video", label: "视频通话", icon: "📹" },
+<<<<<<< HEAD
     { id: "voice", label: "语音通话", icon: "🎧" },
+=======
+>>>>>>> origin/main
     { id: "share", label: "屏幕共享", icon: "🖥" },
   ];
 
