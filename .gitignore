@@ -1,0 +1,23 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+node_modules/
+frontend/node_modules/
+backend/.venv/
+backend/.mypy_cache/
+frontend/dist/
+.DS_Store
+.vscode/
+.idea/
+logs/
+*.log
+# Temporary files
+*.tmp
+*.swp
+
+docs/
+test*.*
+
+backend/storage/
+storage/

@@ -1,0 +1,47 @@
+.nf-root {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.nf-bg {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, #0a1f33 0%, #030910 100%);
+  opacity: 0.9;
+}
+
+.nf-content {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+
+.nf-content h2 {
+  margin: 0 0 8px;
+}
+
+.nf-content p {
+  margin: 0 0 12px;
+  color: #94a3b8;
+}
+
+.ghost-btn {
+  background: none;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  color: inherit;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.ghost-btn:hover {
+  border-color: #7dd3fc;
+}
+
+

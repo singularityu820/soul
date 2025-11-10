@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "emotion-agent-backend"
+version = "0.1.0"
+description = "Multimodal emotion agent backend service"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.23",
+    "pydantic>=2.6",
+    "numpy>=1.24",
+    "httpx>=0.26",
+    "deepface>=0.0.79",
+    "opencv-python>=4.5.0",
+    "tensorflow>=2.8.0",
+    "aiortc>=1.5.0",
+    "av>=10.0.0",
+    "aiofiles>=23.0.0",
+    "dashscope>=1.14.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.26",
+    "pytest>=7.4"
+]

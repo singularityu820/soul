@@ -1,0 +1,16 @@
+.starportal-planb-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: #000000;
+}
+
+.starportal-planb-root canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
