@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAudioRecorder } from "../hooks/useAudioRecorder";
 import "../styles.css";
-import testAudio from "./test.wav"; // 导入音频文件
 
 /**
  * 录音按钮组件 - 支持模拟对话模式
@@ -28,17 +27,17 @@ export default function AudioRecordButton({ threadId, onResponse, disabled, addS
     {
       user: "今天好累，但也特别开心，因为项目终于完成啦",
       ai: "忙了这么久，终于可以松一口气呀，你为这个项目付出的努力，我都记着呢。现在你该放松放松了，放下手机去感受自己的本心。让自己开心起来",
-      audioFile: testAudio // 使用导入的音频文件
+      audioFile: null // 暂时不使用音频文件
     },
     {
       user: "最近总是失眠，晚上翻来覆去睡不着",
       ai: "失眠确实让人很困扰。你有没有尝试过睡前做一些放松的活动？比如听一些轻音乐或者冥想。我建议你试试深呼吸练习，这有助于放松身心，更容易入睡。",
-      audioFile: testAudio // 使用导入的音频文件
+      audioFile: null // 暂时不使用音频文件
     },
     {
       user: "今天和朋友吵架了，心情很糟糕",
       ai: "和朋友吵架确实会影响心情。也许你们都需要一些时间冷静一下。等情绪平复后，可以试着和朋友坦诚地沟通，表达你的感受。真正的友谊是能够经受住这些考验的。",
-      audioFile: testAudio // 使用导入的音频文件
+      audioFile: null // 暂时不使用音频文件
     }
   ];
 
