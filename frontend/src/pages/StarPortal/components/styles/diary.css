@@ -1,0 +1,404 @@
+.diary-root {
+  position: relative;
+  overflow: hidden;
+  min-height: fit-content;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+}
+
+/* .diary-book-cover--standalone - 独立封面状态，尺寸通过内联样式设置 */
+
+.diary-book-cover {
+  margin: 0 auto;
+  position: relative;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255, 215, 0, 0.15) 0%, transparent 50%),
+    radial-gradient(circle at 80% 70%, rgba(59, 130, 246, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 50% 50%, rgba(30, 58, 138, 0.3) 0%, transparent 60%),
+    linear-gradient(
+      135deg,
+      #1e3a8a 0%,
+      #1e40af 20%,
+      #2563eb 40%,
+      #1e3a8a 60%,
+      #1e293b 80%,
+      #0f172a 100%
+    );
+  border-radius: 8px;
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+.diary-book-cover:hover {
+  transform: translateZ(0) translateY(-2px);
+  box-shadow:
+    0 25px 70px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.4);
+}
+
+.diary-book-cover::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255, 215, 0, 0.3) 0%, transparent 25%),
+    radial-gradient(ellipse at 70% 80%, rgba(59, 130, 246, 0.25) 0%, transparent 30%),
+    radial-gradient(circle at 50% 50%, rgba(96, 165, 250, 0.15) 0%, transparent 40%),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 1px,
+      rgba(255, 255, 255, 0.02) 1px,
+      rgba(255, 255, 255, 0.02) 2px
+    );
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.diary-book-cover--page {
+  width: 100%;
+  height: 100%;
+}
+
+.diary-cover-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18% 12%;
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+}
+
+.diary-cover-decoration {
+  width: 80%;
+  height: 2px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    rgba(255, 215, 0, 0.6) 15%,
+    rgba(255, 165, 0, 0.8) 35%,
+    rgba(255, 215, 0, 1) 50%,
+    rgba(255, 165, 0, 0.8) 65%,
+    rgba(255, 215, 0, 0.6) 85%,
+    transparent
+  );
+  box-shadow:
+    0 0 12px rgba(255, 215, 0, 0.6),
+    0 0 6px rgba(255, 165, 0, 0.4);
+}
+
+.diary-cover-decoration--top {
+  margin-bottom: auto;
+}
+
+.diary-cover-decoration--bottom {
+  margin-top: auto;
+}
+
+.diary-cover-main {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  justify-content: center;
+}
+
+.diary-cover-title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #FFD700;
+  text-shadow:
+    2px 2px 4px rgba(0, 0, 0, 0.9),
+    0 0 25px rgba(255, 215, 0, 0.6),
+    0 0 50px rgba(255, 215, 0, 0.4),
+    0 0 75px rgba(255, 165, 0, 0.3);
+  font-family: "KaiTi", "STKaiti", "楷体", "行楷-简", serif;
+  letter-spacing: 8px;
+  text-align: center;
+  position: relative;
+  will-change: text-shadow;
+}
+
+.diary-cover-title::before,
+.diary-cover-title::after {
+  content: '✦';
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #FFD700;
+  font-size: 1.8rem;
+  opacity: 0.8;
+  text-shadow: 0 0 15px rgba(255, 215, 0, 0.8);
+}
+
+.diary-cover-title::before {
+  left: -60px;
+}
+
+.diary-cover-title::after {
+  right: -60px;
+}
+
+.diary-cover-subtitle {
+  font-size: 1.2rem;
+  color: rgba(255, 215, 0, 0.9);
+  text-shadow:
+    1px 1px 3px rgba(0, 0, 0, 0.8),
+    0 0 15px rgba(255, 215, 0, 0.5);
+  font-family: "KaiTi", "STKaiti", "楷体", "行楷-简", serif;
+  letter-spacing: 4px;
+  margin-top: 10px;
+}
+
+.diary-cover-ornament {
+  font-size: 2.5rem;
+  color: #FFD700;
+  opacity: 0.9;
+  text-shadow:
+    0 0 15px rgba(255, 215, 0, 0.8),
+    0 0 30px rgba(255, 165, 0, 0.6);
+  margin-top: 20px;
+}
+
+.diary-cover-spine {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  background: linear-gradient(
+    to right,
+    rgba(15, 23, 42, 0.6) 0%,
+    rgba(30, 41, 59, 0.4) 30%,
+    rgba(15, 23, 42, 0.2) 60%,
+    transparent 100%
+  );
+  border-radius: 8px 0 0 8px;
+  box-shadow: inset -2px 0 4px rgba(0, 0, 0, 0.4);
+  will-change: auto;
+}
+
+.diary-page--cover {
+  background: transparent !important;
+  display: block;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.diary-page--cover .diary-book-cover {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  aspect-ratio: unset;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  border-radius: 0;
+}
+
+/* 修复闪动问题 - 使用 GPU 加速和优化渲染 */
+.diary-cover-content {
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
+
+.diary-controls {
+  position: absolute;
+  top: -42px;
+  right: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.diary-btn {
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  background: rgba(10, 24, 38, 0.7);
+  color: #e5edff;
+  cursor: pointer;
+}
+
+.diary-flipbook {
+  margin: 0 auto;
+}
+
+.diary-page {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+}
+
+.diary-text-container {
+  position: absolute;
+  top: 15%;
+  left: 10%;
+  right: 10%;
+  bottom: 15%;
+  font-family: "KaiTi", "STKaiti", "楷体", "行楷-简", Courier, monospace;
+  font-size: 1.1rem;
+  line-height: 2;
+  color: #2c3e50;
+  /* 确保文字容器能正确换行 */
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.diary-text-display {
+  white-space: normal;
+  word-wrap: break-word;
+  word-break: break-word; /* 优先在单词边界换行，必要时在单词内断行 */
+  overflow-wrap: break-word;
+  text-indent: 2em;
+  /*
+   * 自动换行规则：
+   * 1. 如果文字中有换行符(\n)，会在换行符处换行（段落分隔）
+   * 2. 如果没有换行符，会根据容器宽度自动换行
+   * 3. 中文可以在任意字符间换行，英文优先在单词边界换行
+   */
+}
+
+.diary-text-display.diary-text--typing::after {
+  content: "|";
+  animation: blink 1s infinite;
+  margin-left: 2px;
+  color: #2c3e50;
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+/* 编辑功能样式 */
+
+.diary-edit-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(44, 62, 80, 0.3);
+  background: rgba(255, 255, 255, 0.85);
+  color: #2c3e50;
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  opacity: 0.7;
+}
+
+.diary-edit-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.95);
+  transform: scale(1.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.diary-edit-wrapper {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.diary-text-edit {
+  flex: 1;
+  width: 100%;
+  padding: 12px;
+  border: 2px solid rgba(44, 62, 80, 0.3);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  font-family: "KaiTi", "STKaiti", "楷体", "行楷-简", Courier, monospace;
+  font-size: 1.1rem;
+  line-height: 2;
+  color: #2c3e50;
+  resize: none;
+  outline: none;
+  text-indent: 2em;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.diary-text-edit:focus {
+  border-color: rgba(59, 130, 246, 0.6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.diary-text-edit::placeholder {
+  color: rgba(44, 62, 80, 0.4);
+  font-style: italic;
+}
+
+.diary-edit-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.diary-btn--save {
+  background: rgba(34, 197, 94, 0.9) !important;
+  color: white !important;
+  border-color: rgba(34, 197, 94, 0.5) !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.diary-btn--save:hover {
+  background: rgba(34, 197, 94, 1) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+}
+
+.diary-btn--cancel {
+  background: rgba(239, 68, 68, 0.9) !important;
+  color: white !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.diary-btn--cancel:hover {
+  background: rgba(239, 68, 68, 1) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.3);
+}
+
+

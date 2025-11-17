@@ -1,0 +1,85 @@
+/* EEG面板样式 */
+.chatnew-eeg-panel {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 400px;
+  background: rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  padding: 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+  transition: all 0.3s ease;
+}
+
+.eeg-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.eeg-panel-header h3 {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.eeg-panel-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.eeg-mode-toggle, .eeg-panel-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.eeg-mode-toggle:hover, .eeg-panel-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.eeg-mode-toggle.real-mode {
+  background: rgba(76, 175, 80, 0.3);
+  border-color: rgba(76, 175, 80, 0.6);
+}
+
+.eeg-panel-toggle {
+  padding: 6px;
+  width: 32px;
+  height: 32px;
+  justify-content: center;
+}
+
+.eeg-panel-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+.eeg-control-panel-container {
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 16px;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .chatnew-eeg-panel {
+    width: calc(100% - 40px);
+    right: 20px;
+    left: 20px;
+  }
+}

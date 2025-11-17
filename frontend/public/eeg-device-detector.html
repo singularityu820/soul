@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EEG设备检测工具</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 25px;
+            padding: 15px;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+        }
+        .section h2 {
+            margin-top: 0;
+            color: #444;
+            font-size: 18px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .device-list {
+            margin-top: 15px;
+        }
+        .device-item {
+            padding: 10px;
+            margin-bottom: 8px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+            border-left: 4px solid #4CAF50;
+        }
+        .device-name {
+            font-weight: bold;
+        }
+        .device-details {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .instructions {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            font-size: 16px;
+        }
+        .instructions ol {
+            margin-bottom: 0;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>EEG设备检测工具</h1>
+        
+        <div class="section">
+            <h2>1. 检测串口设备</h2>
+            <button id="scanSerialPorts">扫描串口设备</button>
+            <div id="serialStatus" class="status" style="display: none;"></div>
+            <div id="serialDevices" class="device-list"></div>
+            
+            <div class="instructions">
+                <h3>使用说明：</h3>
+                <ol>
+                    <li>将EEG设备通过USB连接到计算机</li>
+                    <li>确保设备驱动已正确安装</li>
+                    <li>点击"扫描串口设备"按钮</li>
+                    <li>从列表中找到您的设备，记下端口名称</li>
+                    <li>在主应用中使用此端口名称连接设备</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>2. 检测蓝牙设备</h2>
+            <button id="scanBluetoothDevices">扫描蓝牙设备</button>
+            <div id="bluetoothStatus" class="status" style="display: none;"></div>
+            <div id="bluetoothDevices" class="device-list"></div>
+            
+            <div class="instructions">
+                <h3>使用说明：</h3>
+                <ol>
+                    <li>确保EEG设备已开启并处于可发现模式</li>
+                    <li>在系统设置中将设备与计算机配对</li>
+                    <li>点击"扫描蓝牙设备"按钮</li>
+                    <li>从列表中找到您的设备，记下设备名称</li>
+                    <li>在主应用中使用此设备名称连接设备</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>3. 连接测试</h2>
+            <div>
+                <label for="connectionType">连接类型：</label>
+                <select id="connectionType">
+                    <option value="serial">串口连接</option>
+                    <option value="bluetooth">蓝牙连接</option>
+                </select>
+            </div>
+            <div style="margin-top: 10px;">
+                <label for="connectionParam">连接参数：</label>
+                <input type="text" id="connectionParam" placeholder="串口名称或蓝牙设备名称">
+            </div>
+            <button id="testConnection" style="margin-top: 10px;">测试连接</button>
+            <div id="connectionStatus" class="status" style="display: none;"></div>
+            
+            <div class="instructions">
+                <h3>使用说明：</h3>
+                <ol>
+                    <li>从上方扫描结果中选择连接类型</li>
+                    <li>输入对应的连接参数（串口名称或蓝牙设备名称）</li>
+                    <li>点击"测试连接"按钮</li>
+                    <li>查看连接结果，确认设备可用</li>
+                    <li>在主应用中使用相同的参数连接设备</li>
+                </ol>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>4. 常见设备</h2>
+            <div class="device-list">
+                <div class="device-item">
+                    <div class="device-name">OpenBCI Cyton/Ganglion</div>
+                    <div class="device-details">
+                        连接类型：串口连接<br>
+                        波特率：115200<br>
+                        串口名称：自动检测或COM3/COM4等
+                    </div>
+                </div>
+                <div class="device-item">
+                    <div class="device-name">NeuroSky MindWave Mobile</div>
+                    <div class="device-details">
+                        连接类型：蓝牙连接<br>
+                        设备名称："MindWave Mobile"或"MindWave"
+                    </div>
+                </div>
+                <div class="device-item">
+                    <div class="device-name">Muse S/2</div>
+                    <div class="device-details">
+                        连接类型：蓝牙连接<br>
+                        设备名称："Muse-XXXX"（XXXX为设备ID）
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // API基础URL
+        const API_BASE = 'http://localhost:8000';
+        
+        // 显示状态消息
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = `status ${type}`;
+            element.style.display = 'block';
+        }
+        
+        // 隐藏状态消息
+        function hideStatus(elementId) {
+            const element = document.getElementById(elementId);
+            element.style.display = 'none';
+        }
+        
+        // 扫描串口设备
+        document.getElementById('scanSerialPorts').addEventListener('click', async function() {
+            const button = this;
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>扫描中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/eeg/real/devices/available`);
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const devices = data.available_ports || [];
+                    const devicesContainer = document.getElementById('serialDevices');
+                    
+                    if (devices.length === 0) {
+                        showStatus('serialStatus', '未找到任何串口设备', 'info');
+                        devicesContainer.innerHTML = '';
+                    } else {
+                        showStatus('serialStatus', `找到 ${devices.length} 个串口设备`, 'success');
+                        
+                        let html = '';
+                        devices.forEach(device => {
+                            html += `
+                                <div class="device-item">
+                                    <div class="device-name">${device.port}</div>
+                                    <div class="device-details">
+                                        描述：${device.description}<br>
+                                        硬件ID：${device.hwid}
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        devicesContainer.innerHTML = html;
+                    }
+                } else {
+                    showStatus('serialStatus', `扫描失败：${data.error || '未知错误'}`, 'error');
+                }
+            } catch (error) {
+                showStatus('serialStatus', `扫描失败：${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '扫描串口设备';
+            }
+        });
+        
+        // 扫描蓝牙设备
+        document.getElementById('scanBluetoothDevices').addEventListener('click', async function() {
+            const button = this;
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>扫描中...';
+            
+            try {
+                // 注意：Web Bluetooth API需要HTTPS环境和用户交互
+                if (!navigator.bluetooth) {
+                    showStatus('bluetoothStatus', '您的浏览器不支持Web Bluetooth API', 'error');
+                    return;
+                }
+                
+                // 请求蓝牙设备
+                const device = await navigator.bluetooth.requestDevice({
+                    acceptAllDevices: true
+                });
+                
+                showStatus('bluetoothStatus', `找到蓝牙设备：${device.name}`, 'success');
+                
+                const devicesContainer = document.getElementById('bluetoothDevices');
+                devicesContainer.innerHTML = `
+                    <div class="device-item">
+                        <div class="device-name">${device.name || '未知设备'}</div>
+                        <div class="device-details">
+                            ID：${device.id}<br>
+                            连接状态：${device.connected ? '已连接' : '未连接'}
+                        </div>
+                    </div>
+                `;
+                
+                // 更新连接参数输入框
+                document.getElementById('connectionParam').value = device.name || '';
+            } catch (error) {
+                if (error.name === 'NotFoundError') {
+                    showStatus('bluetoothStatus', '未找到任何蓝牙设备', 'info');
+                } else {
+                    showStatus('bluetoothStatus', `扫描失败：${error.message}`, 'error');
+                }
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '扫描蓝牙设备';
+            }
+        });
+        
+        // 测试连接
+        document.getElementById('testConnection').addEventListener('click', async function() {
+            const button = this;
+            const connectionType = document.getElementById('connectionType').value;
+            const connectionParam = document.getElementById('connectionParam').value;
+            
+            if (!connectionParam) {
+                showStatus('connectionStatus', '请输入连接参数', 'error');
+                return;
+            }
+            
+            button.disabled = true;
+            button.innerHTML = '<span class="loading"></span>连接中...';
+            
+            try {
+                const response = await fetch(`${API_BASE}/eeg/real/connect`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        connectionType,
+                        [connectionType === 'serial' ? 'port' : 'deviceName']: connectionParam,
+                        simulate: false
+                    }),
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.status === 'connected') {
+                    showStatus('connectionStatus', `连接成功！设备ID：${data.device_id}`, 'success');
+                } else {
+                    showStatus('connectionStatus', `连接失败：${data.message || '未知错误'}`, 'error');
+                }
+            } catch (error) {
+                showStatus('connectionStatus', `连接失败：${error.message}`, 'error');
+            } finally {
+                button.disabled = false;
+                button.innerHTML = '测试连接';
+            }
+        });
+        
+        // 连接类型变化时更新占位符
+        document.getElementById('connectionType').addEventListener('change', function() {
+            const connectionParam = document.getElementById('connectionParam');
+            if (this.value === 'serial') {
+                connectionParam.placeholder = '例如：COM3 或 /dev/ttyUSB0';
+            } else {
+                connectionParam.placeholder = '例如：MindWave Mobile';
+            }
+        });
+    </script>
+</body>
+</html>
