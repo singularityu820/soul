@@ -151,3 +151,11 @@ test*.*
 *.test.py
 tests/
 __tests__/
+
+docs/
+*.md
+!README.md
+!.github/copilot-instructions.md
+.env
+
+test/
