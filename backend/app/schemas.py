@@ -149,3 +149,14 @@ class MemoryRecordOut(BaseModel):
 class MemorySnapshotOut(BaseModel):
     recent_events: List[MemoryRecordOut]
     size: int
+
+
+class InfoRequest(BaseModel):
+    type: Literal["getInfo", "writeInfo"]
+    name: str
+    data: Optional[Any] = None
+
+
+class InfoResponse(BaseModel):
+    code: int = 200
+    data: str
