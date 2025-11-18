@@ -10,7 +10,7 @@ from ..services.diary import DiaryService
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/diary", tags=["diary"])
+router = APIRouter()
 
 
 def get_diary_service() -> DiaryService:
