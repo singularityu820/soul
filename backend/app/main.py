@@ -65,7 +65,7 @@ from .services.emotion import (
 from .services.emotion.eeg_waveform import EEGWaveformService
 from .services.realtime.webrtc import WebRTCSignalHub
 from .services.realtime.session import AgentWebRTCSession
-
+from .routes.diary import router as diary_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -332,6 +332,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# 注册路由
+app.include_router(diary_router, prefix="/diary", tags=["diary"])
+
 
 
 # Global singletons for demonstration; replace with DI container in production.
