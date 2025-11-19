@@ -151,3 +151,6 @@ test*.*
 *.test.py
 tests/
 __tests__/
+docs/
+test/
+.env
