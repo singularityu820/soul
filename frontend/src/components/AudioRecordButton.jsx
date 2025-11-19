@@ -1,195 +1,223 @@
-import { useEffect, useState } from "react";
-import { useAudioRecorder } from "../hooks/useAudioRecorder";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVoiceStream } from "../hooks/useVoiceStream";
 import "../styles.css";
 
 /**
- * 录音按钮组件 - 支持模拟对话模式
- * 
- * 替代 WebRTC 的简单音频录制方案
+ * 录音按钮组件
+ *
+ * 默认通过 WebSocket 实时语音管道(useVoiceStream) 与后端交互，
+ * 也保留模拟对话模式以便在后台不可用时做演示。
  */
-export default function AudioRecordButton({ threadId, onResponse, disabled, addSelfMessage, addAiMessage, simulateMode = true }) {
-  const {
-    isRecording,
-    isProcessing,
-    duration,
-    error,
-    recordAndUpload,
-    cancelRecording,
-  } = useAudioRecorder();
-
-  const [responseAudio, setResponseAudio] = useState(null);
+export default function AudioRecordButton({
+  threadId,
+  onResponse,
+  disabled,
+  addSelfMessage,
+  addAiMessage,
+  simulateMode = false,
+}) {
   const [transcript, setTranscript] = useState("");
   const [responseText, setResponseText] = useState("");
   const [messageIndex, setMessageIndex] = useState(0);
+  const [connectionError, setConnectionError] = useState(null);
+  const [autoStreaming, setAutoStreaming] = useState(!simulateMode);
+  const lastHandledResponseRef = useRef("");
 
-  // 预设的模拟对话内容
-  const simulatedConversations = [
-    {
-      user: "今天好累，但也特别开心，因为项目终于完成啦",
-      ai: "忙了这么久，终于可以松一口气呀，你为这个项目付出的努力，我都记着呢。现在你该放松放松了，放下手机去感受自己的本心。让自己开心起来",
-      audioFile: null // 暂时不使用音频文件
-    },
-    {
-      user: "最近总是失眠，晚上翻来覆去睡不着",
-      ai: "失眠确实让人很困扰。你有没有尝试过睡前做一些放松的活动？比如听一些轻音乐或者冥想。我建议你试试深呼吸练习，这有助于放松身心，更容易入睡。",
-      audioFile: null // 暂时不使用音频文件
-    },
-    {
-      user: "今天和朋友吵架了，心情很糟糕",
-      ai: "和朋友吵架确实会影响心情。也许你们都需要一些时间冷静一下。等情绪平复后，可以试着和朋友坦诚地沟通，表达你的感受。真正的友谊是能够经受住这些考验的。",
-      audioFile: null // 暂时不使用音频文件
+  const {
+    isConnected,
+    isRecording,
+    status,
+    transcript: streamTranscript,
+    response: streamResponse,
+    error: streamError,
+    connect,
+    disconnect,
+    startRecording,
+    stopRecording,
+    interrupt,
+  } = useVoiceStream();
+
+  // 建立/释放 WebSocket 语音流连接
+  useEffect(() => {
+    setAutoStreaming(!simulateMode);
+  }, [simulateMode]);
+
+  useEffect(() => {
+    if (simulateMode || !threadId || disabled || !autoStreaming) {
+      stopRecording();
+      disconnect();
+      return;
     }
-  ];
 
-  // 格式化时长
-  const formatDuration = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, "0")}`;
-  };
+    let cancelled = false;
 
-  // 处理模拟对话
+    connect(threadId)
+      .then(() => {
+        if (!cancelled) {
+          setConnectionError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setConnectionError(err.message || "连接失败");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      stopRecording();
+      disconnect();
+    };
+  }, [simulateMode, autoStreaming, threadId, disabled, connect, disconnect, stopRecording]);
+
+  useEffect(() => {
+    if (simulateMode || !autoStreaming || disabled) return;
+    if (!threadId) return;
+    if (!isConnected || isRecording) return;
+
+    startRecording().catch((err) => {
+      console.error("Auto start recording failed", err);
+      setConnectionError(err.message || "无法开始语音");
+    });
+  }, [simulateMode, autoStreaming, disabled, threadId, isConnected, isRecording, startRecording]);
+
+  // 实时展示后端推送的结果
+  useEffect(() => {
+    if (simulateMode) return;
+    setTranscript(streamTranscript || "");
+  }, [simulateMode, streamTranscript]);
+
+  useEffect(() => {
+    if (simulateMode) return;
+    setResponseText(streamResponse || "");
+  }, [simulateMode, streamResponse]);
+
+  // 语音流完成后追加到聊天面板并触发外部回调
+  useEffect(() => {
+    if (simulateMode) return;
+    if (!streamResponse || streamResponse.trim().length === 0) return;
+    if (isRecording) return;
+    if (status && status !== "idle") return;
+
+    const snapshot = `${streamTranscript || ""}||${streamResponse}`;
+    if (snapshot === lastHandledResponseRef.current) {
+      return;
+    }
+    lastHandledResponseRef.current = snapshot;
+
+    if (addSelfMessage && streamTranscript) {
+      addSelfMessage(streamTranscript);
+    }
+
+    if (addAiMessage && streamResponse) {
+      addAiMessage(streamResponse);
+    }
+
+    if (onResponse) {
+      onResponse({
+        transcript: streamTranscript,
+        response_text: streamResponse,
+        simulated: false,
+      });
+    }
+  }, [simulateMode, streamResponse, streamTranscript, status, isRecording, addAiMessage, addSelfMessage, onResponse]);
+
   const handleSimulatedConversation = () => {
-    if (disabled || isProcessing) return;
+    if (disabled) return;
 
-    const currentConversation = simulatedConversations[messageIndex % simulatedConversations.length];
-    
-    // 添加用户消息
-    addSelfMessage(currentConversation.user);
-    setTranscript(currentConversation.user);
-    
-    // 延迟添加AI回复，模拟处理时间
+    const current = simulatedConversations[messageIndex % simulatedConversations.length];
+
+    addSelfMessage?.(current.user);
+    setTranscript(current.user);
+
     setTimeout(() => {
-      addAiMessage(currentConversation.ai);
-      setResponseText(currentConversation.ai);
-      
-      // 播放AI回复的音频
-      if (currentConversation.audioFile) {
-        const audio = new Audio(currentConversation.audioFile);
-        audio.play().catch((err) => {
-          console.error("Failed to play simulated audio:", err);
-        });
-      }
-      
-      // 更新消息索引
-      setMessageIndex(prev => prev + 1);
-      
-      // 回调通知父组件
-      if (onResponse) {
-        onResponse({
-          transcript: currentConversation.user,
-          response_text: currentConversation.ai,
-          simulated: true,
-          audio_file: currentConversation.audioFile
-        });
-      }
-    }, 1000); // 1秒延迟，模拟处理时间
+      addAiMessage?.(current.ai);
+      setResponseText(current.ai);
+      setMessageIndex((prev) => prev + 1);
+
+      onResponse?.({
+        transcript: current.user,
+        response_text: current.ai,
+        simulated: true,
+      });
+    }, 1000);
   };
 
-  // 处理录音/上传
-  const handleClick = async () => {
+  const getStatusText = () => {
+    if (!isConnected) return "连接中...";
+    if (status === "transcribing") return "识别中...";
+    if (status === "generating") return "思考中...";
+    if (status === "synthesizing") return "合成中...";
+    if (isRecording) return "聆听中...";
+    return "就绪";
+  };
+
+  const handleVoiceStreamToggle = async () => {
     if (simulateMode) {
-      // 模拟对话模式
       handleSimulatedConversation();
       return;
     }
 
-    // 原有的录音逻辑
-    if (disabled || isProcessing) return;
+    if (disabled || !threadId) {
+      return;
+    }
 
-    try {
-      const result = await recordAndUpload(threadId);
-      console.log("Record and upload result:", result);
-      
-      
-      if (result) {
-        // 处理响应
-        setTranscript(result.transcript);
-        setResponseText(result.response_text);
-
-        addSelfMessage(result.transcript);
-        addAiMessage(result.response_text);
-        
-        // 播放响应音频
-        if (result.audio_reference) {
-          // 如果是 URL,直接使用
-          if (result.audio_reference.startsWith("http")) {
-            setResponseAudio(result.audio_reference);
-          } else {
-            // 如果是本地引用,通过下载接口获取
-            const audioUrl = `http://localhost:8000/audio/download?reference=${encodeURIComponent(result.audio_reference)}`;
-            setResponseAudio(audioUrl);
-          }
-        }
-
-        // 回调通知父组件
-        if (onResponse) {
-          onResponse(result);
-        }
-      }
-    } catch (err) {
-      console.error("Record and upload failed:", err);
+    if (autoStreaming) {
+      setAutoStreaming(false);
+      interrupt();
+      stopRecording();
+    } else {
+      lastHandledResponseRef.current = "";
+      setTranscript("");
+      setResponseText("");
+      setAutoStreaming(true);
     }
   };
 
-  // 自动播放响应音频
-  useEffect(() => {
-    if (responseAudio) {
-      // 检查是否是占位符URL
-      if (responseAudio.startsWith("sandbox://") || 
-          responseAudio.startsWith("empty://") || 
-          responseAudio.startsWith("error://") || 
-          responseAudio.startsWith("missing-key://")) {
-        console.log("Skipping playback for placeholder audio URL:", responseAudio);
-        return;
-      }
-      
-      const audio = new Audio(responseAudio);
-      audio.play().catch((err) => {
-        console.error("Failed to play response audio:", err);
-      });
-    }
-  }, [responseAudio]);
+  const activeError = simulateMode ? null : streamError || connectionError;
+  const isActionDisabled = disabled || (!simulateMode && !threadId);
 
   return (
     <div className="audio-record-container">
       <button
-        className={`audio-record-btn ${isRecording ? "recording" : ""} ${isProcessing ? "processing" : ""}`}
-        onClick={handleClick}
-        disabled={(!simulateMode && disabled) || isProcessing}
-        title={simulateMode ? "点击模拟对话" : (isRecording ? "点击停止录音并发送" : "点击开始录音")}
+        className={`audio-record-btn ${isRecording ? "recording" : ""}`}
+        onClick={handleVoiceStreamToggle}
+        disabled={isActionDisabled}
+        title={simulateMode ? "点击模拟对话" : isRecording ? "点击停止录音" : "点击开始语音对话"}
       >
-        {isProcessing ? (
+        {simulateMode ? (
+          <>
+            <span>💬</span>
+            <span>对话</span>
+          </>
+        ) : !isConnected ? (
           <>
             <span className="spinner">⏳</span>
-            <span>处理中...</span>
+            <span>连接中</span>
           </>
-        ) : isRecording ? (
+        ) : autoStreaming ? (
           <>
-            <span className="recording-indicator">🔴</span>
-            <span>{formatDuration(duration)}</span>
+            <span className={isRecording ? "recording-indicator" : ""}>{isRecording ? "🔴" : "🔊"}</span>
+            <span>{isRecording ? "实时语音" : "待命"}</span>
           </>
         ) : (
           <>
-            <span>{simulateMode ? "💬" : "🎤"}</span>
-            <span>{simulateMode ? "对话" : "按住说话"}</span>
+            <span>▶️</span>
+            <span>恢复</span>
           </>
         )}
       </button>
 
-      {isRecording && (
-        <button
-          className="audio-cancel-btn"
-          onClick={cancelRecording}
-          title="取消录音"
-        >
-          ✕
-        </button>
+      {!simulateMode && (
+        <div className="voice-stream-status-compact" style={{ color: isRecording ? "#ef4444" : "#10b981" }}>
+          <span className="status-dot" style={{ backgroundColor: isRecording ? "#ef4444" : "#10b981" }}></span>
+          {autoStreaming ? getStatusText() : "已暂停"}
+        </div>
       )}
 
-      {error && <div className="audio-error">{error}</div>}
+      {activeError && <div className="audio-error">⚠️ {activeError}</div>}
 
-      {/* {transcript && (
+      {transcript && (
         <div className="audio-transcript">
           <strong>你说:</strong> {transcript}
         </div>
@@ -199,7 +227,7 @@ export default function AudioRecordButton({ threadId, onResponse, disabled, addS
         <div className="audio-response">
           <strong>AI:</strong> {responseText}
         </div>
-      )} */}
+      )}
     </div>
   );
 }

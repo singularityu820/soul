@@ -4,17 +4,23 @@ import AudioRecordButton from "../../components/AudioRecordButton.jsx";
 import ChatSidebar from "../../components/chat/ChatSidebar.jsx";
 import ChatWindow from "../../components/chat/ChatWindow.jsx";
 import EmotionPanel from "../../components/chat/EmotionPanel.jsx";
-import { useWebRTC } from "../../hooks/useWebRTC.js";
 import "./styles/index.css";
+import { resolveApiBaseUrl, resolveWebSocketUrl } from "../../utils/endpointResolver";
 
-const API_PREFIX = "http://localhost:8000";
-
-const makeWsUrl = (path) => {
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  // 使用后端的 WebSocket 地址
-  const host = window.location.hostname;
-  const port = 8000;  // 后端端口
-  return `${protocol}://${host}:${port}${path}`;
+const API_PREFIX = resolveApiBaseUrl();
+const PIPELINE_WS_OPTIONS = {
+  envVar: "VITE_PIPELINE_WS_URL",
+  windowKeys: [
+    "pipelineWsUrl",
+    "pipelineWSUrl",
+    "pipelineWebsocketUrl",
+    "pipelineSocketUrl",
+    "pipelineStreamUrl",
+  ],
+};
+const CHAT_WS_OPTIONS = {
+  envVar: "VITE_CHAT_WS_URL",
+  windowKeys: ["chatWsUrl", "chatSocketUrl", "chatWebsocketUrl"],
 };
 
 export default function ChatApp() {
@@ -25,39 +31,9 @@ export default function ChatApp() {
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
-  const [callStatus, setCallStatus] = useState(null);
-  const [activeCallRoomId, setActiveCallRoomId] = useState(null);
 
   const chatSocketRef = useRef(null);
   const messageIdsRef = useRef(new Set());
-  const remoteAudioRef = useRef(null);
-
-  // WebRTC hook
-  const {
-    startCall,
-    stopCall,
-    connectionState,
-    isConnecting,
-    remoteAudioRef: webrtcAudioRef,
-  } = useWebRTC(
-    activeCallRoomId,
-    (remoteStream, streamType) => {
-      console.log("Remote stream received", streamType || "audio", remoteStream);
-      if (streamType === 'video') {
-        // 视频流处理可以在这里添加
-        console.log("Video stream received but not handled in App.jsx");
-      } else {
-        // 处理音频流
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = remoteStream;
-        }
-      }
-    },
-    (error) => {
-      console.error("WebRTC error:", error);
-      setCallStatus({ mode: callStatus?.mode, message: `连接失败: ${error.message}` });
-    }
-  );
 
   const emotion = pipelineEvent?.emotion ?? null;
   const avatarPose = pipelineEvent?.avatar ?? null;
@@ -97,7 +73,7 @@ export default function ChatApp() {
   }, [refreshThreads]);
 
   useEffect(() => {
-    const url = makeWsUrl("/ws/pipeline");
+    const url = resolveWebSocketUrl("/ws/pipeline", PIPELINE_WS_OPTIONS);
     const socket = new WebSocket(url);
 
     socket.onopen = () => setPipelineStatus("connected");
@@ -122,7 +98,7 @@ export default function ChatApp() {
     messageIdsRef.current = new Set();
     setMessagesLoading(true);
 
-    const url = makeWsUrl(`/ws/chat?thread_id=${activeThreadId}`);
+    const url = resolveWebSocketUrl(`/ws/chat?thread_id=${activeThreadId}`, CHAT_WS_OPTIONS);
     const socket = new WebSocket(url);
     chatSocketRef.current = socket;
 
@@ -219,52 +195,6 @@ export default function ChatApp() {
     [activeThreadId, threads, handleCreateThread]
   );
 
-  const handleCallAction = useCallback(
-    async (mode) => {
-      if (!activeThreadId) {
-        setCallStatus({ mode, message: "请选择会话后再发起通话" });
-        return;
-      }
-
-      const roomId = `${activeThreadId}-${mode}`;
-
-      // 如果已有通话，先停止
-      if (activeCallRoomId) {
-        stopCall();
-        setActiveCallRoomId(null);
-        setCallStatus(null);
-        return;
-      }
-
-      // 启动新通话
-      setActiveCallRoomId(roomId);
-      setCallStatus({ mode, message: "正在建立连接…" });
-
-      try {
-        await startCall({ roomId, mode });
-        setCallStatus({ mode, message: "通话已建立" });
-      } catch (error) {
-        console.error("Failed to start call", error);
-        setCallStatus({ mode, message: "连接失败，请重试" });
-        setActiveCallRoomId(null);
-      }
-    },
-    [activeThreadId, activeCallRoomId, startCall, stopCall]
-  );
-
-  // 监听连接状态变化
-  useEffect(() => {
-    if (connectionState === "connected") {
-      setCallStatus((prev) => prev ? { ...prev, message: "通话中" } : null);
-    } else if (connectionState === "failed") {
-      setCallStatus((prev) => prev ? { ...prev, message: "连接失败" } : null);
-      setActiveCallRoomId(null);
-    } else if (connectionState === "closed") {
-      setCallStatus(null);
-      setActiveCallRoomId(null);
-    }
-  }, [connectionState]);
-
   // 处理情绪检测结果
   const handleEmotionUpdate = useCallback((emotionData) => {
     // 更新当前情绪状态
@@ -355,8 +285,6 @@ export default function ChatApp() {
           messages={messages}
           loading={messagesLoading && chatStatus === "connecting"}
           onSend={handleSendMessage}
-          callStatus={callStatus}
-          onCallAction={handleCallAction}
           emotionData={pipelineEvent?.face_emotion}
           onEmotionUpdate={handleEmotionUpdate}
         />
@@ -378,7 +306,7 @@ export default function ChatApp() {
         />
       </main>
 
-      {/* HTTP 音频录制按钮 (WebRTC 替代方案) */}
+      {/* 实时语音按钮 (WebSocket 管道) */}
       <div style={{
         borderTop: '1px solid rgba(80, 120, 160, 0.25)',
         background: 'rgba(8, 25, 41, 0.5)',
@@ -393,11 +321,6 @@ export default function ChatApp() {
           disabled={!activeThreadId}
         />
       </div>
-
-      {/* 隐藏的音频元素用于播放远端音频 */}
-      <audio ref={remoteAudioRef} autoPlay style={{ display: "none" }} />
-      {/* 将 webrtcAudioRef 传递给底层 hook */}
-      <audio ref={webrtcAudioRef} autoPlay style={{ display: "none" }} />
     </div>
   );
 }

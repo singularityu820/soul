@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import AsyncIterator, Dict, Optional
 
 import httpx
 
@@ -127,6 +127,40 @@ class LLMService:
         except Exception as e:
             logger.exception(f"LLM generation error: {e}")
             raise
+
+    async def generate_stream(
+        self,
+        prompt: str = "",
+        *,
+        messages: Optional[list[dict[str, object]]] = None,
+        chunk_size: int = 80,
+        **kwargs: object,
+    ) -> AsyncIterator[str]:
+        """轻量级流式接口：在无原生流式API时按 chunk 依次返回文本"""
+        gen_kwargs = dict(kwargs)
+        if messages is not None:
+            gen_kwargs["messages"] = messages
+
+        full_text = await self.generate(prompt, **gen_kwargs)
+        if not full_text:
+            return
+
+        buffer: list[str] = []
+        break_chars = {"。", "！", "？", "!", "?", "；", ";", "\n"}
+
+        for ch in full_text:
+            buffer.append(ch)
+            should_flush = ch in break_chars or len(buffer) >= chunk_size
+            if should_flush:
+                chunk = "".join(buffer).strip()
+                buffer.clear()
+                if chunk:
+                    yield chunk
+
+        if buffer:
+            chunk = "".join(buffer).strip()
+            if chunk:
+                yield chunk
 
     def _detect(self) -> LLMDetectionResult:
         config = self.config

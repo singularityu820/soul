@@ -5,77 +5,41 @@ import AudioRecordButton from "../../components/AudioRecordButton.jsx";
 import EEGWaveformDisplay from "../../components/EEGWaveformDisplay.jsx";
 import EEGDeviceControlPanel from "../../components/EEGDeviceControlPanel.jsx";
 import ChatApp from "./ChatAppCopy.jsx";
-import { useWebRTC } from "../../hooks/useWebRTC.js";
 import { v4 as uuidv4 } from "uuid";
+import { resolveApiBaseUrl, resolveWebSocketUrl } from "../../utils/endpointResolver";
+import { safelyCloseWebSocket } from "../../utils/websocketHelpers";
 
-const API_PREFIX = "http://localhost:8000";
-
-const makeWsUrl = (path) => {
-  const protocol = window.location.protocol === "https:" ? "wss" : "ws";
-  // 使用后端的 WebSocket 地址
-  const host = window.location.hostname;
-  const port = 8000;  // 后端端口
-  return `${protocol}://${host}:${port}${path}`;
+const API_PREFIX = resolveApiBaseUrl();
+const PIPELINE_WS_OPTIONS = {
+  envVar: "VITE_PIPELINE_WS_URL",
+  windowKeys: [
+    "pipelineWsUrl",
+    "pipelineWSUrl",
+    "pipelineWebsocketUrl",
+    "pipelineSocketUrl",
+    "pipelineStreamUrl",
+  ],
 };
-
-// 获取 API 前缀（用于 HTTP 请求）
-const getApiPrefix = () => {
-  const hostname = window.location.hostname;
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:8000`;
-  }
-  return "http://localhost:8000";
+const CHAT_WS_OPTIONS = {
+  envVar: "VITE_CHAT_WS_URL",
+  windowKeys: ["chatWsUrl", "chatSocketUrl", "chatWebsocketUrl"],
 };
 
 export default function ChatNew() {
   const [messages, setMessages] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [chatStatus, setChatStatus] = useState("idle");
-  const [messagesLoading, setMessagesLoading] = useState(false);
   const [isEntering, setIsEntering] = useState(true);
-  const [isHangingUp, setIsHangingUp] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [callStatus, setCallStatus] = useState(null);
-  const [activeCallRoomId, setActiveCallRoomId] = useState(null);
-  const [pipelineStatus, setPipelineStatus] = useState("connecting");
   const [pipelineEvent, setPipelineEvent] = useState(null);
-  const [showVideoPlaceholder, setShowVideoPlaceholder] = useState(true);
-  const [activeThread, setActiveThread] = useState(null);
   const [showEEGControlPanel, setShowEEGControlPanel] = useState(false);
   const [useRealEEGData, setUseRealEEGData] = useState(false);
   
   const messagesEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const pipelineSocketRef = useRef(null);
+  const pipelineReconnectTimerRef = useRef(null);
   const chatSocketRef = useRef(null);
   const messageIdsRef = useRef(new Set());
-  const remoteAudioRef = useRef(null);
-
-  // WebRTC hook - 参照ChatApp.jsx
-  const {
-    startCall,
-    stopCall,
-    connectionState,
-    isConnecting,
-    remoteAudioRef: webrtcAudioRef,
-  } = useWebRTC(
-    activeCallRoomId,
-    (remoteStream, streamType) => {
-      console.log("Remote stream received", streamType || "audio", remoteStream);
-      if (streamType === 'video') {
-        // 视频流处理在ChatWindow中
-        console.log("Video stream received");
-      } else {
-        // 处理音频流
-        if (remoteAudioRef.current) {
-          remoteAudioRef.current.srcObject = remoteStream;
-        }
-      }
-    },
-    (error) => {
-      console.error("WebRTC error:", error);
-      setCallStatus((prev) => prev ? { ...prev, message: `连接失败: ${error.message}` } : null);
-    }
-  );
   
   // 入场动画
   useEffect(() => {
@@ -84,114 +48,6 @@ export default function ChatNew() {
     }, 100);
     return () => clearTimeout(timer);
   }, []);
-
-  // 处理通话操作 - 参照ChatApp.jsx
-  const handleCallAction = useCallback(
-    async (mode) => {
-      if (!activeThreadId) {
-        setCallStatus({ mode, message: "请选择会话后再发起通话" });
-        return;
-      }
-
-      const roomId = `${activeThreadId}-${mode}`;
-
-      // 如果已有通话，先停止
-      if (activeCallRoomId) {
-        stopCall();
-        setActiveCallRoomId(null);
-        setCallStatus(null);
-        setShowVideoPlaceholder(true);
-        return;
-      }
-
-      // 启动新通话
-      setActiveCallRoomId(roomId);
-      setCallStatus({ mode, message: "正在建立连接…" });
-      // 先不隐藏占位符，等连接成功后再隐藏
-
-      try {
-        await startCall({ roomId, mode });
-        setCallStatus({ mode, message: "通话已建立" });
-        // 连接建立后，等待一下再隐藏占位符，让视频流有时间加载
-        if (mode === 'video') {
-          setTimeout(() => {
-            setShowVideoPlaceholder(false);
-          }, 500);
-        }
-      } catch (error) {
-        console.error("Failed to start call", error);
-        setCallStatus({ mode, message: "连接失败，请重试" });
-        setActiveCallRoomId(null);
-        setShowVideoPlaceholder(true);
-      }
-    },
-    [activeThreadId, activeCallRoomId, startCall, stopCall]
-  );
-
-  // 监听连接状态变化 - 参照ChatApp.jsx
-  useEffect(() => {
-    if (connectionState === "connected") {
-      setCallStatus((prev) => {
-        if (prev && prev.mode === 'video') {
-          // 连接成功后，隐藏占位符
-          setShowVideoPlaceholder(false);
-          return { ...prev, message: "通话中" };
-        }
-        return prev;
-      });
-    } else if (connectionState === "failed") {
-      setCallStatus((prev) => prev ? { ...prev, message: "连接失败" } : null);
-      setActiveCallRoomId(null);
-      setShowVideoPlaceholder(true);
-    } else if (connectionState === "closed") {
-      setCallStatus(null);
-      setActiveCallRoomId(null);
-      setShowVideoPlaceholder(true);
-    }
-  }, [connectionState]);
-
-  // 挂断处理
-  const handleHangup = () => {
-    // 停止通话
-    if (activeCallRoomId) {
-      stopCall();
-      setActiveCallRoomId(null);
-      setCallStatus(null);
-      setShowVideoPlaceholder(true);
-    }
-
-    setIsHangingUp(true);
-    setIsTransitioning(true);
-    // 转场动画完成后，导航回星空页面
-    setTimeout(() => {
-      if (window.navigate) {
-        window.navigate("#/");
-      } else {
-        window.location.hash = "#/";
-      }
-    }, 1500);
-  };
-  
-  // 启动视频通话 - 参照ChatApp.jsx
-  const startVideoCall = useCallback(() => {
-    if (!activeThreadId || !activeThread) {
-      setCallStatus({ mode: 'video', message: "请等待会话初始化..." });
-      return;
-    }
-    // 直接调用handleCallAction启动视频通话
-    handleCallAction('video');
-  }, [activeThreadId, activeThread, handleCallAction]);
-  
-  // 进入页面1秒后自动启动视频通话
-  useEffect(() => {
-    if (!activeCallRoomId && !isHangingUp && activeThreadId) {
-      const timer = setTimeout(() => {
-        startVideoCall();
-      }, 1000); // 1秒后触发
-      return () => clearTimeout(timer);
-    }
-  }, [activeCallRoomId, isHangingUp, activeThreadId, startVideoCall]);
-
 
   // 自动滚动到底部
   const scrollToBottom = () => {
@@ -219,7 +75,6 @@ export default function ChatNew() {
       if (created.ok) {
         const thread = await created.json();
         setActiveThreadId(thread.thread_id);
-        setActiveThread(thread);
         }
         return;
       }
@@ -227,19 +82,11 @@ export default function ChatNew() {
       // 使用第一个thread
       const firstThread = data[0];
       setActiveThreadId((prev) => prev ?? firstThread?.thread_id ?? null);
-      if (firstThread && !activeThread) {
-        setActiveThread(firstThread);
-      }
     } catch (error) {
       console.error("Failed to initialize thread", error);
       // 如果API请求失败，创建一个默认的thread ID，以便模拟对话功能可以正常工作
       const defaultThreadId = `default-${uuidv4()}`;
       setActiveThreadId(defaultThreadId);
-      setActiveThread({
-        thread_id: defaultThreadId,
-        title: "对话",
-        participants: ["me", "agent"]
-      });
     }
   }, []);
 
@@ -248,89 +95,46 @@ export default function ChatNew() {
     initializeThread();
   }, [initializeThread]);
 
-  // 获取情绪对应的脑电波形数据 - 参照ChatApp.jsx
-  const fetchEEGWaveform = useCallback(async (emotion) => {
-    if (!emotion) return;
-
-    try {
-      const response = await fetch(`${API_PREFIX}/eeg/face-waveform/${emotion}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const waveformData = await response.json();
-        console.log('EEG waveform data:', waveformData);
-
-        // 更新脑电波形数据
-        setPipelineEvent(prev => ({
-          ...prev,
-          eeg_waveform: {
-            waveform: waveformData,
-            emotion: emotion
-          }
-        }));
-      }
-    } catch (error) {
-      console.error('Error fetching EEG waveform:', error);
-    }
-  }, []);
-
-  // 处理情绪检测结果 - 参照ChatApp.jsx
-  const handleEmotionUpdate = useCallback((emotionData) => {
-    // 更新当前情绪状态
-    if (emotionData.type === 'eeg_waveform') {
-      // 处理脑电波形数据
-      setPipelineEvent(prev => ({
-        ...prev,
-        eeg_waveform: {
-          waveform: emotionData.waveform,
-          emotion: emotionData.emotion
-        }
-      }));
-    } else if (emotionData.type === 'face_emotion') {
-      // 处理面部情绪数据
-      setPipelineEvent(prev => ({
-        ...prev,
-        face_emotion: {
-          label: emotionData.emotion || emotionData.label,
-          confidence: emotionData.confidence,
-          face_position: emotionData.face_position
-        }
-      }));
-
-      // 同时更新emotion状态，确保情绪雷达能接收到数据
-      setPipelineEvent(prev => ({
-        ...prev,
-        emotion: emotionData.emotion || emotionData.label
-      }));
-
-      // 当检测到面部情绪时，获取对应的脑电波形数据
-      // 这样可以确保脑电波形数据只在需要时获取，而不是每3秒获取一次
-      fetchEEGWaveform(emotionData.emotion || emotionData.label);
-    }
-  }, [fetchEEGWaveform]);
-
   // Pipeline WebSocket 连接 - 接收情绪和脑电波数据
   useEffect(() => {
-    const url = makeWsUrl("/ws/pipeline");
-    const socket = new WebSocket(url);
+    let shouldReconnect = true;
 
-    socket.onopen = () => setPipelineStatus("connected");
-    socket.onclose = () => setPipelineStatus("disconnected");
-    socket.onerror = () => setPipelineStatus("error");
-    socket.onmessage = (message) => {
-      try {
-        const payload = JSON.parse(message.data);
-        setPipelineEvent(payload);
-      } catch (error) {
-        console.error("Failed to parse pipeline event", error);
-      }
+    const connect = () => {
+      const url = resolveWebSocketUrl("/ws/pipeline", PIPELINE_WS_OPTIONS);
+      const socket = new WebSocket(url);
+      pipelineSocketRef.current = socket;
+
+      socket.onmessage = (message) => {
+        try {
+          const payload = JSON.parse(message.data);
+          setPipelineEvent(payload);
+        } catch (error) {
+          console.error("Failed to parse pipeline event", error);
+        }
+      };
+
+      socket.onerror = (event) => {
+        console.error("Pipeline socket error", event);
+      };
+
+      socket.onclose = () => {
+        pipelineSocketRef.current = null;
+        if (!shouldReconnect) return;
+        pipelineReconnectTimerRef.current = window.setTimeout(connect, 2000);
+      };
     };
 
-    return () => socket.close();
+    connect();
+
+    return () => {
+      shouldReconnect = false;
+      if (pipelineReconnectTimerRef.current) {
+        clearTimeout(pipelineReconnectTimerRef.current);
+        pipelineReconnectTimerRef.current = null;
+      }
+      safelyCloseWebSocket(pipelineSocketRef.current, "ChatNew pipeline cleanup");
+      pipelineSocketRef.current = null;
+    };
   }, []);
 
   // WebSocket连接 - 接收消息
@@ -339,29 +143,25 @@ export default function ChatNew() {
 
     setMessages([]);
     messageIdsRef.current = new Set();
-    setMessagesLoading(true);
 
     // 如果是模拟模式，不需要建立WebSocket连接
     if (activeThreadId.startsWith('default-')) {
       setChatStatus("connected");
-      setMessagesLoading(false);
       return;
     }
 
-    const url = makeWsUrl(`/ws/chat?thread_id=${activeThreadId}`);
+    const url = resolveWebSocketUrl(`/ws/chat?thread_id=${activeThreadId}`, CHAT_WS_OPTIONS);
     const socket = new WebSocket(url);
     chatSocketRef.current = socket;
 
     socket.onopen = () => {
       setChatStatus("connected");
-      setMessagesLoading(false);
     };
     socket.onclose = () => {
       setChatStatus("disconnected");
     };
     socket.onerror = () => {
       setChatStatus("error");
-      setMessagesLoading(false);
     };
     socket.onmessage = (event) => {
       try {
@@ -381,7 +181,6 @@ export default function ChatNew() {
       } catch (error) {
         console.error("Failed to parse chat event", error);
       } finally {
-        setMessagesLoading(false);
       }
     };
 
@@ -414,21 +213,6 @@ export default function ChatNew() {
     setMessages((prev) => [...prev, message]);
   }
 
-  // 发送消息
-  const handleSend = useCallback(async (text) => {
-    if (!text || !text.trim() || !activeThreadId) return;
-
-    try {
-      await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: text.trim() }),
-      });
-    } catch (error) {
-      console.error("Failed to send chat message", error);
-    }
-  }, [activeThreadId]);
-
   // 处理语音响应
   const handleAudioResponse = useCallback((result) => {
     console.log("Audio response received:", result);
@@ -436,7 +220,7 @@ export default function ChatNew() {
   }, []);
 
   return (
-    <div className={`chatnew-root${isEntering ? ' is-entering' : ''}${isTransitioning ? ' is-transitioning' : ''}`}>
+    <div className={`chatnew-root${isEntering ? ' is-entering' : ''}`}>
       <div 
         className="chatnew-background" 
         style={{ backgroundImage: `url('${backgroundImg}')` }}
@@ -479,38 +263,10 @@ export default function ChatNew() {
       </div>
 
       <div className="chatnew-content">
-        {/* 左侧视频通话区域 */}
+        {/* 左侧聊天与情绪检测区域 */}
         <div className="chatnew-video-container">
-          <div className={`chatnew-video-frame${callStatus && callStatus.mode === 'video' ? ' has-video-stream' : ''}`}>
-            {/*{showVideoPlaceholder && (!callStatus || callStatus.mode !== 'video') ? (*/}
-            {/*  <div className="chatnew-video-placeholder">*/}
-            {/*    <div className="chatnew-video-placeholder-icon">*/}
-            {/*      <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">*/}
-            {/*        <path d="M17 10.5V7C17 6.45 16.55 6 16 6H4C3.45 6 3 6.45 3 7V17C3 17.55 3.45 18 4 18H16C16.55 18 17 17.55 17 17V13.5L21 17.5V6.5L17 10.5Z" fill="rgba(255, 255, 255, 0.6)"/>*/}
-            {/*      </svg>*/}
-            {/*    </div>*/}
-            {/*    <p className="chatnew-video-placeholder-text">视频通话</p>*/}
-            {/*    <p className="chatnew-video-placeholder-subtitle">*/}
-            {/*      {callStatus?.message || "等待连接..."}*/}
-            {/*    </p>*/}
-            {/*  </div>*/}
-            {/*) : activeThread ? (*/}
-              {/* <div className="chatnew-chatwindow-wrapper">
-                
-                {callStatus && callStatus.mode === 'video' && (
-                  <button 
-                    className={`chatnew-hangup-btn${isHangingUp ? ' is-hanging-up' : ''}`}
-                    aria-label="挂断"
-                    onClick={handleHangup}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <path d="M19 6.41L17.59 5L12 10.59L6.41 5L5 6.41L10.59 12L5 17.59L6.41 19L12 13.41L17.59 19L19 17.59L13.41 12L19 6.41Z" fill="white"/>
-                    </svg>
-                  </button>
-                )}
-              </div> */}
-              <ChatApp handleHangup={handleHangup} />
-            {/*) : null}*/}
+          <div className="chatnew-video-frame">
+            <ChatApp />
           </div>
         </div>
 
@@ -552,13 +308,9 @@ export default function ChatNew() {
           disabled={!activeThreadId || chatStatus !== "connected"}
           addSelfMessage={addSelfMessage}
           addAiMessage={addAiMessage}
-          simulateMode={true}
         />
       </div>
       
-      {/* 隐藏的音频元素用于播放远端音频 - 参照ChatApp.jsx */}
-      <audio ref={remoteAudioRef} autoPlay style={{ display: "none" }} />
-      <audio ref={webrtcAudioRef} autoPlay style={{ display: "none" }} />
     </div>
   );
 }

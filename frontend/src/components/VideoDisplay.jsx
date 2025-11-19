@@ -2,17 +2,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import PropTypes from 'prop-types';
 import './VideoDisplay.css';
 import eegEventBus from '../utils/eegEventBus';
+import { resolveApiBaseUrl } from '../utils/endpointResolver';
 
-// 获取当前API地址前缀
-const getApiPrefix = () => {
-  // 如果通过 IP 访问页面,则使用该 IP 作为 API 地址
-  const hostname = window.location.hostname;
-  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-    return `http://${hostname}:8000`;
-  }
-  // 默认使用 localhost (仅用于开发)
-  return "http://localhost:8000";
-};
+const API_PREFIX = resolveApiBaseUrl();
 
 export default function VideoDisplay({ stream, emotionData, isActive, roomId, onEmotionDetected, emotionDetectionEnabled = true }) {
   const videoRef = useRef(null);
@@ -124,8 +116,7 @@ export default function VideoDisplay({ stream, emotionData, isActive, roomId, on
         console.log('Sending emotion detection request to backend with roomId:', roomIdToUse);
         
         try {
-          const apiPrefix = getApiPrefix();
-          const response = await fetch(`${apiPrefix}/video/emotion`, {
+          const response = await fetch(`${API_PREFIX}/video/emotion`, {
             method: 'POST',
             body: formData
           });
@@ -174,8 +165,7 @@ export default function VideoDisplay({ stream, emotionData, isActive, roomId, on
     if (!emotion) return;
     
     try {
-      const apiPrefix = getApiPrefix();
-      const response = await fetch(`${apiPrefix}/eeg/waveform/${emotion}`, {
+      const response = await fetch(`${API_PREFIX}/eeg/waveform/${emotion}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json'

@@ -100,33 +100,6 @@ class ChatEvent(BaseModel):
     deleted: bool = False
 
 
-class WebRTCOffer(BaseModel):
-    type: Literal["offer"] = "offer"
-    sdp: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class WebRTCAnswer(BaseModel):
-    type: Literal["answer"] = "answer"
-    sdp: str
-    metadata: Dict[str, Any] = Field(default_factory=dict)
-
-
-class WebRTCCandidate(BaseModel):
-    candidate: str
-    sdp_mid: Optional[str] = None
-    sdp_mline_index: Optional[int] = None
-    username_fragment: Optional[str] = None
-
-
-class WebRTCStateOut(BaseModel):
-    room_id: str
-    offer: Optional[WebRTCOffer] = None
-    answer: Optional[WebRTCAnswer] = None
-    candidates: List[WebRTCCandidate] = Field(default_factory=list)
-    updated_at: datetime
-
-
 class FaceObservationIn(BaseModel):
     label: str
     confidence: float = Field(ge=0.0, le=1.0)
@@ -149,3 +122,14 @@ class MemoryRecordOut(BaseModel):
 class MemorySnapshotOut(BaseModel):
     recent_events: List[MemoryRecordOut]
     size: int
+
+
+class InfoRequest(BaseModel):
+    type: Literal["getInfo", "writeInfo"]
+    name: str
+    data: Optional[Any] = None
+
+
+class InfoResponse(BaseModel):
+    code: int = 200
+    data: str
