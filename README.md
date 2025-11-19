@@ -11,7 +11,7 @@ Multimodal real-time emotion companion that fuses simulated EEG signals and faci
 - **Avatar orchestration**: Translates emotion outputs into sprite expressions, poses, and color themes.
 - **Modular memory stack**: Working/episodic/semantic/perceptual memories routed through a unified manager with vector search, graph relations, and RAG-ready document ingestion.
 - **LLM/TTS provider orchestration**: Auto-detects OpenAI, ModelScope, Zhipu AI, vLLM, or Ollama backends, and now streams GPT-SoVITs TTS requests chunk-by-chunk on punctuation/voice markers (replacing `0.0.0.0` URLs with the configured public base) while falling back to sandbox stubs when credentials are missing.
-- **WebRTC voice calling**: Real-time audio communication via WebRTC, enabling microphone capture → backend Agent processing → TTS audio streaming back to the browser with low latency. Uses aiortc on the backend and native WebRTC APIs on the frontend.
+- **WebSocket voice streaming**: Low-latency voice loop built on `/ws/voice-stream`, streaming microphone audio via WebSocket → ASR → LLM → TTS, then pushing segmented responses back to the browser for immediate playback.
 - **ASR integration**: Automatic speech recognition (Whisper API, Azure Speech, DashScope Qwen ASR, ModelScope) converts user voice to text, which feeds into the LLM conversation pipeline. Supports Chinese, English, Japanese, and more.
 - **WebSocket streaming**: Pushes emotion, avatar, and agent events to the UI in real time.
 - **Front-end dashboard**: React UI showing EEG waveforms, channel contributions, agent log, and manual user memory inputs.
@@ -25,7 +25,7 @@ backend/
       agent/         # LLM, TTS, agent orchestration, memory adapter
       emotion/       # EEG simulator, face tool, fusion pipeline, avatar
       chat/          # Chat service and websocket emitters
-      realtime/      # WebRTC signaling hub
+      realtime/      # WebSocket voice streaming utilities
     memory/          # Modular memory system (manager, types, storage, RAG)
     config.py        # Configuration dataclasses
     main.py          # FastAPI entrypoint and routes
@@ -58,9 +58,8 @@ The backend exposes:
 - `GET /chat/threads` – list chat threads; `POST` to create a new one.
 - `GET /chat/threads/{id}/messages` – fetch recent messages; `POST` to append a user message and trigger the agent response.
 - `WS /ws/chat?thread_id=...` – live stream chat events (history + incremental updates).
-- `POST /webrtc/{room}/offer` – initiate WebRTC voice call, returns SDP answer for real-time audio.
-- `DELETE /webrtc/{room}` – close active WebRTC session and release resources.
-- `WS /ws/webrtc/{room}` – subscribe to signaling updates in real time.
+- `POST /audio/conversation` – upload audio to trigger the ASR → LLM → TTS pipeline and receive synthesized speech.
+- `WS /ws/voice-stream` – establish a full-duplex WebSocket session for live microphone streaming, transcripts, and segmented TTS playback.
 
 ### 3. 启动前端 (React + Vite)
 
@@ -72,13 +71,17 @@ npm run dev
 
 The dev server proxies API and WebSocket calls to `http://localhost:8000`. Open the printed Vite URL to see the dashboard.
 
+#### Voice stream endpoint override
+
+When you deploy the frontend behind a reverse proxy (non-`localhost:8000`), set `VITE_VOICE_STREAM_WS_URL` in `frontend/.env` to the absolute WebSocket endpoint (for example `wss://api.example.com/ws/voice-stream`). The `useVoiceStream` hook will try to infer sensible defaults—`ws://localhost:8000` during Vite dev ports (`5173`, `4173`, `3000`, `8080`), otherwise the current origin—but the explicit env var removes any ambiguity. You can also provide `window.__SOUL_CONFIG__.voiceStreamWsUrl` when embedding the bundle in another host page.
+
 ## Extending with Real Signals
 
 - **EEG**: Replace `EEGEmotionClassifier` logic with calls into your actual MLP tool/API. The `EEGStreamTool` already exposes a single integration point (`classify`).
 - **Face recognition**: Feed results from a YOLO or other video pipeline to `/ingest/face` (or wire the detector directly into `FaceEmotionTool`).
 - **LLM-driven agent**: The `LLMService` auto-picks a provider via env/endpoint probing; export `LLM_PROVIDER=openai|modelscope|zhipu|vllm|ollama` to override or supply the corresponding API keys/endpoints. Set `SOVITS_ENDPOINT` (plus optional `SOVITS_PUBLIC_BASE`, `SOVITS_APP_KEY`, `SOVITS_DOWNLOAD_URL`) so chunked GPT-SoVITs calls can stream audio as soon as punctuation/voice markers land in the LLM output.
 - **Avatar rendering**: The front-end `AvatarCanvas` can be swapped with a richer WebGL canvas or a game engine stream that listens to the same WebSocket.
-- **WebRTC voice calling**: Click the "语音通话" button in the UI to start a real-time audio call. The backend uses `aiortc` to establish peer connection, capture user microphone audio, and stream TTS responses back. Configure STUN/TURN servers via environment variables (`STUN_SERVER`, `TURN_SERVER`, `TURN_USERNAME`, `TURN_CREDENTIAL`) for NAT traversal. See `backend/.env.example` for reference.
+- **WebSocket voice streaming**: Use the voice toggle in the chat UI to open `/ws/voice-stream`. Microphone audio is chunked to 16kHz PCM, streamed via WebSocket, and the backend responds with transcripts, streaming LLM chunks, and TTS segment URLs. No STUN/TURN setup is required.
 - **ASR (Speech Recognition)**: Set `ASR_PROVIDER=openai|azure|dashscope|modelscope` and corresponding API keys (`OPENAI_API_KEY` for Whisper, `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` for Azure, `DASHSCOPE_API_KEY` for Qwen ASR). User voice is automatically transcribed and fed into the LLM conversation. Falls back to sandbox mode if no ASR provider is configured.
 - Set `TTS_PROVIDER` (azure|edge|polly|coqui|ollama|sovits) or rely on auto detection (`AZURE_TTS_KEY`, `EDGE_TTS_KEY`, AWS credentials, or responsive Ollama endpoint).
 
@@ -92,7 +95,8 @@ The dev server proxies API and WebSocket calls to `http://localhost:8000`. Open 
 ## Configuration Guides
 
 - **[LLM Configuration](docs/LLM_CONFIGURATION.md)** - How to configure LLM providers (OpenAI, ModelScope, Zhipu, vLLM, Ollama) and troubleshoot connection issues
-- **[WebRTC Voice Calling](docs/WEBRTC_GUIDE.md)** - Setup guide for real-time voice communication
+- **[WebSocket Voice Stream](docs/VOICE_STREAM_GUIDE.md)** - Current guide for the streaming voice pipeline
+- **[WebRTC Voice Calling (legacy)](docs/WEBRTC_GUIDE.md)** - Archived notes on the retired aiortc-based system
 - **[DashScope ASR Integration](docs/DASHSCOPE_ASR.md)** - Configure Alibaba Cloud's Qwen ASR service
 
 ### LLM/TTS/ASR Auto-detection Rules

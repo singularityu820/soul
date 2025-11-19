@@ -1,7 +1,6 @@
-"""Realtime signaling and streaming service modules."""
+"""Realtime streaming service modules."""
 
-from .webrtc import WebRTCSignalHub
-from .session import AgentWebRTCSession
+from .voice_stream import VoiceStreamHub, VoiceStreamSession
 
-__all__ = ["WebRTCSignalHub", "AgentWebRTCSession"]
+__all__ = ["VoiceStreamHub", "VoiceStreamSession"]
 

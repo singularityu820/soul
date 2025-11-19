@@ -1,10 +1,15 @@
+import { resolveApiBaseUrl, resolveWebSocketUrl } from "../utils/endpointResolver";
+
 /**
  * EEG设备API服务
  * 处理与真实EEG设备的连接、数据获取和状态管理
  */
 
-// API基础URL
-const API_PREFIX = process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000';
+const API_PREFIX = resolveApiBaseUrl();
+const EEG_WS_OPTIONS = {
+  envVar: "VITE_EEG_REAL_WS_URL",
+  windowKeys: ["eegRealWsUrl", "eegWsUrl", "eegSocketUrl"],
+};
 
 /**
  * EEG设备服务类
@@ -200,9 +205,7 @@ class EEGDeviceService {
       this.statusCallback = statusCallback;
 
       // 确定WebSocket URL
-      const wsUrl = process.env.NODE_ENV === 'production' 
-        ? `/ws/eeg/real/stream/${roomId}` 
-        : `ws://localhost:8000/ws/eeg/real/stream/${roomId}`;
+      const wsUrl = resolveWebSocketUrl(`/ws/eeg/real/stream/${roomId}`, EEG_WS_OPTIONS);
 
       // 创建WebSocket连接
       this.streamSocket = new WebSocket(wsUrl);
