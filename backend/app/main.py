@@ -60,6 +60,7 @@ from .services.emotion import (
 )
 from .services.emotion.eeg_waveform import EEGWaveformService
 from .services.info_store import read_info, write_info
+from .routes.diary import router as diary_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
