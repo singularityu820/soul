@@ -46,6 +46,7 @@ class ChatStorage:
                     tts_provider TEXT,
                     audio_reference TEXT,
                     audio_segments TEXT,
+                    username TEXT,
                     FOREIGN KEY (thread_id) REFERENCES threads(thread_id)
                 )
             """)
@@ -58,6 +59,11 @@ class ChatStorage:
             conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_messages_created_at 
                 ON messages(created_at)
+            """)
+            
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_messages_username 
+                ON messages(username)
             """)
             
             conn.commit()
@@ -130,7 +136,7 @@ class ChatStorage:
                 for row in rows
             ]
     
-    def save_message(self, message: ChatMessage):
+    def save_message(self, message: ChatMessage, username: str = None):
         """Save a message"""
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
@@ -138,8 +144,8 @@ class ChatStorage:
                 INSERT OR REPLACE INTO messages 
                 (message_id, thread_id, role, text, created_at, language,
                  emotion_label, emotion_score, voice_style, llm_provider,
-                 tts_provider, audio_reference, audio_segments)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 tts_provider, audio_reference, audio_segments, username)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     message.message_id,
@@ -155,6 +161,7 @@ class ChatStorage:
                     message.tts_provider,
                     message.audio_reference,
                     json.dumps(message.audio_segments) if message.audio_segments else None,
+                    username,
                 ),
             )
             conn.commit()
@@ -203,3 +210,39 @@ class ChatStorage:
                 (timestamp, thread_id),
             )
             conn.commit()
+    
+    def get_recent_messages_by_username(self, username: str, limit: int = 3) -> List[ChatMessage]:
+        """Get recent messages for a user by username"""
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                """
+                SELECT message_id, thread_id, role, text, created_at, language,
+                       emotion_label, emotion_score, voice_style, llm_provider,
+                       tts_provider, audio_reference, audio_segments
+                FROM messages 
+                WHERE username = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (username, limit),
+            )
+            rows = cursor.fetchall()
+            
+            return [
+                ChatMessage(
+                    message_id=row[0],
+                    thread_id=row[1],
+                    role=row[2],
+                    text=row[3],
+                    created_at=datetime.fromisoformat(row[4]),
+                    language=row[5],
+                    emotion_label=row[6],
+                    emotion_score=row[7],
+                    voice_style=row[8],
+                    llm_provider=row[9],
+                    tts_provider=row[10],
+                    audio_reference=row[11],
+                    audio_segments=json.loads(row[12]) if row[12] else None,
+                )
+                for row in rows
+            ]

@@ -11,7 +11,7 @@ import uuid
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form
+from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File, Form, Cookie
 from fastapi.encoders import jsonable_encoder
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
@@ -48,6 +48,7 @@ from .schemas import (
 from .services.agent import AgentMemory, ConversationalAgent, LLMService, TTSService
 from .services.agent.asr import ASRService
 from .services.chat.service import ChatService
+from .services.chat.storage import ChatStorage
 from .services.emotion import (
     AvatarOrchestrator,
     EmotionFusionService,
@@ -433,6 +434,7 @@ pipeline = EmotionPipeline(
     agent=agent,
 )
 chat_service = ChatService(agent=agent, pipeline=pipeline)
+chat_storage = ChatStorage()
 eeg_waveform_service = EEGWaveformService()
 # 创建真实EEG处理器
 real_eeg_processor = create_eeg_processor()
@@ -647,16 +649,38 @@ async def get_messages(
     return await chat.history(thread_id, limit=limit)
 
 
+@app.get("/chat/recent-messages", response_model=list[ChatMessage])
+async def get_recent_messages_by_username(
+    username: str | None = Cookie(None),
+    limit: int = 3,
+) -> list[ChatMessage]:
+    """
+    获取当前登录用户最近的聊天消息
+    从cookie中读取username，返回该用户最近的limit条消息
+    """
+    if not username:
+        raise HTTPException(status_code=401, detail="Username not found in cookie")
+    
+    messages = chat_storage.get_recent_messages_by_username(username, limit)
+    return messages
+
+
 @app.post("/chat/threads/{thread_id}/messages", response_model=ChatMessage, status_code=201)
 async def post_message(
     thread_id: str,
     payload: ChatMessageIn,
+    username: str | None = Cookie(None),
     chat: ChatService = Depends(get_chat_service),
 ) -> ChatMessage:
     thread = await chat.get_thread(thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     message = await chat.add_user_message(thread_id, payload.text, payload.language)
+    
+    # 保存消息到数据库，关联username
+    if username:
+        chat_storage.save_message(message, username)
+    
     return message
 
 
