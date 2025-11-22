@@ -5,6 +5,7 @@ import logging
 import time
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import AsyncIterator, Optional, Dict, List, Callable, Any
 import uuid
@@ -1559,10 +1560,13 @@ async def voice_stream_websocket(
         session_id = uuid.uuid4().hex
     
     session: VoiceStreamSession | None = None
+    
+    # 从 Cookie 中获取 username
+    username = websocket.cookies.get("username")
+    logger.info(f"Voice stream WebSocket connected: {session_id}, username: {username}")
 
     try:
         await websocket.accept()
-        logger.info(f"Voice stream WebSocket connected: {session_id}")
         
         # 定义转录回调函数
         async def on_transcript(transcript: str):
@@ -1572,6 +1576,22 @@ async def voice_stream_websocket(
                 
                 # 发送转录文本到客户端
                 await session.send_message("transcript", {"text": transcript})
+                
+                # 保存用户消息到数据库（关联username）
+                if username:
+                    try:
+                        user_message = ChatMessage(
+                            message_id=uuid.uuid4().hex,
+                            thread_id=session_id,  # 使用session_id作为thread_id
+                            role="user",
+                            text=transcript,
+                            created_at=datetime.utcnow(),
+                            language="zh",
+                        )
+                        chat_storage.save_message(user_message, username)
+                        logger.info(f"[Voice Stream] Saved user message for username: {username}")
+                    except Exception as e:
+                        logger.error(f"[Voice Stream] Failed to save user message: {e}", exc_info=True)
                 
                 # 构建对话消息
                 messages = [
@@ -1699,6 +1719,22 @@ async def voice_stream_websocket(
                         await process_sentence(remaining_text, segment_count)
                     
                     logger.info(f"[Voice Stream] LLM complete. Generated {segment_count} segments. Full response: {full_response[:100]}...")
+                    
+                    # 保存AI响应消息到数据库（关联username）
+                    if username:
+                        try:
+                            assistant_message = ChatMessage(
+                                message_id=uuid.uuid4().hex,
+                                thread_id=session_id,  # 使用session_id作为thread_id
+                                role="assistant",
+                                text=full_response,
+                                created_at=datetime.utcnow(),
+                                language="zh",
+                            )
+                            chat_storage.save_message(assistant_message, username)
+                            logger.info(f"[Voice Stream] Saved assistant message for username: {username}")
+                        except Exception as e:
+                            logger.error(f"[Voice Stream] Failed to save assistant message: {e}", exc_info=True)
                     
                     # 发送完整响应
                     await session.send_response(full_response)
