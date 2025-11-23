@@ -1,0 +1,42 @@
+.message-list__section-title {
+  text-align: center;
+  padding: 10px 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+  margin: 10px 0;
+  position: relative;
+}
+
+.message-list__section-title::before,
+.message-list__section-title::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 30%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.message-list__section-title::before {
+  left: 10px;
+}
+
+.message-list__section-title::after {
+  right: 10px;
+}
+
+/* 历史消息的样式 */
+.message-list .message-bubble:nth-child(n+2):nth-child(-n+4) {
+  opacity: 0.8;
+}
+
+.message-list .message-bubble:nth-child(n+2):nth-child(-n+4) .message-bubble__content {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.message-list .message-bubble:nth-child(n+2):nth-child(-n+4).message-bubble--user .message-bubble__content {
+  background: rgba(147, 51, 234, 0.1);
+  border: 1px solid rgba(147, 51, 234, 0.2);
+}

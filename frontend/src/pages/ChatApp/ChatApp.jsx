@@ -6,6 +6,7 @@ import ChatWindow from "../../components/chat/ChatWindow.jsx";
 import EmotionPanel from "../../components/chat/EmotionPanel.jsx";
 import "./styles/index.css";
 import { resolveApiBaseUrl, resolveWebSocketUrl } from "../../utils/endpointResolver";
+import { getRecentMessages } from "../../utils/api.js";
 
 const API_PREFIX = resolveApiBaseUrl();
 const PIPELINE_WS_OPTIONS = {
@@ -31,6 +32,7 @@ export default function ChatApp() {
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
+  const [recentMessages, setRecentMessages] = useState([]);
 
   const chatSocketRef = useRef(null);
   const messageIdsRef = useRef(new Set());
@@ -45,7 +47,9 @@ export default function ChatApp() {
 
   const refreshThreads = useCallback(async () => {
     try {
-      const response = await fetch(`${API_PREFIX}/chat/threads`);
+      const response = await fetch(`${API_PREFIX}/chat/threads`, {
+        credentials: 'include', // 包含cookies
+      });
       if (!response.ok) throw new Error("failed to fetch threads");
       const data = await response.json();
       if (data.length === 0) {
@@ -53,6 +57,7 @@ export default function ChatApp() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: "随心对话", participants: ["me", "agent"] }),
+          credentials: 'include', // 包含cookies
         });
         if (created.ok) {
           const thread = await created.json();
@@ -68,9 +73,22 @@ export default function ChatApp() {
     }
   }, []);
 
+  // 获取历史消息
+  const fetchRecentMessages = useCallback(async () => {
+    try {
+      const messages = await getRecentMessages();
+      setRecentMessages(messages);
+      console.log("获取到的历史消息:", messages);
+    } catch (error) {
+      console.error("获取历史消息失败:", error);
+      setRecentMessages([]);
+    }
+  }, []);
+
   useEffect(() => {
     refreshThreads();
-  }, [refreshThreads]);
+    fetchRecentMessages(); // 获取历史消息
+  }, [refreshThreads, fetchRecentMessages]);
 
   useEffect(() => {
     const url = resolveWebSocketUrl("/ws/pipeline", PIPELINE_WS_OPTIONS);
@@ -135,6 +153,7 @@ export default function ChatApp() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text }),
+          credentials: 'include', // 包含cookies
         });
       } catch (error) {
         console.error("Failed to send chat message", error);
@@ -152,6 +171,7 @@ export default function ChatApp() {
           title: `会话 ${threads.length + 1}`,
           participants: ["me", "agent"],
         }),
+        credentials: 'include', // 包含cookies
       });
       if (!response.ok) throw new Error("create thread failed");
       const thread = await response.json();
@@ -168,6 +188,7 @@ export default function ChatApp() {
         // 发送DELETE请求到后端
         const response = await fetch(`${API_PREFIX}/chat/threads/${threadId}`, {
           method: "DELETE",
+          credentials: 'include', // 包含cookies
         });
 
         if (!response.ok) {
@@ -283,6 +304,7 @@ export default function ChatApp() {
         <ChatWindow
           thread={activeThread}
           messages={messages}
+          recentMessages={recentMessages}
           loading={messagesLoading && chatStatus === "connecting"}
           onSend={handleSendMessage}
           emotionData={pipelineEvent?.face_emotion}

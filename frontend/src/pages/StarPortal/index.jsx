@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import "./styles/index.css";
 import Modal from "../../components/ui/Modal.jsx";
 import Diary from "./components/Diary";
+import LoginModal from "../LoginModal";
+import { checkLoginStatus } from "../../auth.js";
 import bgVideo from "./styles/img/background.mp4";
 import starImg from "./styles/img/star.png";
 import moonImg from "./styles/img/moon.png";
@@ -23,6 +25,8 @@ export default function StarPortal() {
   const [activeStarId, setActiveStarId] = useState(null);
   // 弹层开启动画状态
   const [modalOpen, setModalOpen] = useState(false);
+  // 登录模态框状态
+  const [showLoginModal, setShowLoginModal] = useState(false);
   // 背景视频是否循环
   const [loopVideo, setLoopVideo] = useState(true);
   // 王子视频引用
@@ -83,6 +87,13 @@ export default function StarPortal() {
   useEffect(() => {
     queryStars();
     getRoseGrowthProgress();
+    
+    // 检查登录状态，如果未登录则显示登录模态框
+    const isLoggedIn = checkLoginStatus();
+    if (!isLoggedIn) {
+      setShowLoginModal(true);
+    }
+    // 移除自动跳转逻辑，让已登录用户也能访问星空首页
 
     // 初始化视频：停留在第一帧
     const video = princeVideoRef.current;
@@ -390,6 +401,11 @@ export default function StarPortal() {
 
   const handleClose = () => setModalOpen(false);
   const handleAfterClose = () => setActiveStarId(null);
+  
+  // 登录成功处理 - 只关闭模态框，不跳转
+  const handleLoginSuccess = () => {
+    setShowLoginModal(false);
+  };
 
   return (
     <div className={`portal-root${isTransitioning || isTransitioningToChat ? ' is-transitioning' : ''}`}>
@@ -490,6 +506,14 @@ export default function StarPortal() {
       <Modal open={modalOpen} onClose={handleClose} afterClose={handleAfterClose} isFullscreen={true}>
         {components[activeStarId] || <div style={{ padding: 16 }}>敬请期待</div>}
       </Modal>
+      
+      {/* 登录模态框 */}
+      {showLoginModal && (
+        <LoginModal 
+          onClose={() => setShowLoginModal(false)} 
+          onLoginSuccess={handleLoginSuccess} 
+        />
+      )}
     </div>
   );
 }

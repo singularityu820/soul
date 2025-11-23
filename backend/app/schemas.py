@@ -81,11 +81,13 @@ class ChatMessage(BaseModel):
     tts_provider: Optional[str] = None
     audio_reference: Optional[str] = None
     audio_segments: Optional[List[str]] = None
+    username: Optional[str] = None
 
 
 class ChatMessageIn(BaseModel):
     text: str
     language: str = "zh"
+    username: Optional[str] = None
 
 
 class ChatThreadCreateIn(BaseModel):

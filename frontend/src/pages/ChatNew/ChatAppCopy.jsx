@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ChatWindow from "../../components/chat/ChatWindow.jsx";
 import { resolveApiBaseUrl, resolveWebSocketUrl } from "../../utils/endpointResolver";
 import { safelyCloseWebSocket } from "../../utils/websocketHelpers";
+import Cookies from 'js-cookie';
 
 const API_PREFIX = resolveApiBaseUrl();
 const PIPELINE_WS_OPTIONS = {
@@ -100,7 +101,9 @@ export default function ChatAppCopy() {
 
   const refreshThreads = useCallback(async () => {
     try {
-      const response = await fetch(`${API_PREFIX}/chat/threads`);
+      const response = await fetch(`${API_PREFIX}/chat/threads`, {
+        credentials: 'include', // 包含cookies
+      });
       if (!response.ok) throw new Error("failed to fetch threads");
       const data = await response.json();
 
@@ -109,6 +112,7 @@ export default function ChatAppCopy() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: "随心对话", participants: ["me", "agent"] }),
+          credentials: 'include', // 包含cookies
         });
 
         if (!created.ok) return;
@@ -216,10 +220,13 @@ export default function ChatAppCopy() {
     async (text) => {
       if (!activeThreadId) return;
       try {
+        // 获取当前登录用户的username
+        const username = Cookies.get('username');
         await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
+          body: JSON.stringify({ text, username }),
+          credentials: 'include', // 包含cookies
         });
       } catch (error) {
         console.error("Failed to send chat message", error);
