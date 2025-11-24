@@ -5,7 +5,9 @@ import logging
 import time
 import json
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+from datetime import datetime
 from typing import AsyncIterator, Optional, Dict, List, Callable, Any
 import uuid
 
@@ -383,13 +385,14 @@ app = FastAPI(title="Soul Emotion Agent", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 
 # 注册路由
-app.include_router(diary_router, prefix="/diary", tags=["diary"])
+app.include_router(diary_router, prefix="/api/diary", tags=["diary"])
 
 
 
@@ -648,6 +651,34 @@ async def get_messages(
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
     return await chat.history(thread_id, limit=limit)
+
+@app.get("/chat/recent-messages", response_model=list[ChatMessage])
+async def get_recent_messages_by_username(
+    username: str | None = Cookie(None),
+    limit: int = 3,
+) -> list[ChatMessage]:
+    """
+    获取当前登录用户最近的聊天消息
+    从cookie中读取username，返回该用户最近的limit条消息
+    """
+    if not username:
+        raise HTTPException(status_code=401, detail="Username not found in cookie")
+    
+    messages = chat_storage.get_recent_messages_by_username(username, limit)
+    return messages
+
+
+@app.get("/chat/user/{username}/recent", response_model=dict)
+async def get_user_recent_messages(
+    username: str,
+    limit: int = 3,
+) -> dict:
+    """
+    获取指定用户最近的聊天消息
+    返回该用户最近的limit条消息，格式为 {"messages": [...]}
+    """
+    messages = chat_storage.get_recent_messages_by_username(username, limit)
+    return {"messages": messages}
 
 
 @app.get("/chat/recent-messages", response_model=list[ChatMessage])
@@ -1559,10 +1590,16 @@ async def voice_stream_websocket(
         session_id = uuid.uuid4().hex
     
     session: VoiceStreamSession | None = None
+    
+    # 从 Cookie 中获取 username
+    username = websocket.cookies.get("username")
+    logger.info(f"Voice stream WebSocket connected: {session_id}, username: {username}")
 
+    # 从 Cookie 中获取 username
+    username = websocket.cookies.get("username")
+    logger.info(f"Voice stream WebSocket connected: {session_id}, username: {username}")
     try:
         await websocket.accept()
-        logger.info(f"Voice stream WebSocket connected: {session_id}")
         
         # 定义转录回调函数
         async def on_transcript(transcript: str):
@@ -1572,6 +1609,22 @@ async def voice_stream_websocket(
                 
                 # 发送转录文本到客户端
                 await session.send_message("transcript", {"text": transcript})
+                
+                # 保存用户消息到数据库（关联username）
+                if username:
+                    try:
+                        user_message = ChatMessage(
+                            message_id=uuid.uuid4().hex,
+                            thread_id=session_id,  # 使用session_id作为thread_id
+                            role="user",
+                            text=transcript,
+                            created_at=datetime.utcnow(),
+                            language="zh",
+                        )
+                        chat_storage.save_message(user_message, username)
+                        logger.info(f"[Voice Stream] Saved user message for username: {username}")
+                    except Exception as e:
+                        logger.error(f"[Voice Stream] Failed to save user message: {e}", exc_info=True)
                 
                 # 构建对话消息
                 messages = [
@@ -1699,6 +1752,22 @@ async def voice_stream_websocket(
                         await process_sentence(remaining_text, segment_count)
                     
                     logger.info(f"[Voice Stream] LLM complete. Generated {segment_count} segments. Full response: {full_response[:100]}...")
+                    
+                    # 保存AI响应消息到数据库（关联username）
+                    if username:
+                        try:
+                            assistant_message = ChatMessage(
+                                message_id=uuid.uuid4().hex,
+                                thread_id=session_id,  # 使用session_id作为thread_id
+                                role="agent",
+                                text=full_response,
+                                created_at=datetime.utcnow(),
+                                language="zh",
+                            )
+                            chat_storage.save_message(assistant_message, username)
+                            logger.info(f"[Voice Stream] Saved assistant message for username: {username}")
+                        except Exception as e:
+                            logger.error(f"[Voice Stream] Failed to save assistant message: {e}", exc_info=True)
                     
                     # 发送完整响应
                     await session.send_response(full_response)

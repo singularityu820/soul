@@ -4,10 +4,13 @@ export default function MessageBubble({ message }) {
   const isAgent = message.role === "agent";
   const bubbleClass = `message-bubble ${isAgent ? "message-bubble--agent" : "message-bubble--user"}`;
 
+  // 对于用户消息，显示username；对于AI消息，显示"小精灵"
+  const displayName = isAgent ? "小精灵" : (message.username || "我");
+
   return (
     <div className={bubbleClass}>
       <div className="message-bubble__header">
-        <span className="message-bubble__role">{isAgent ? "小精灵" : "我"}</span>
+        <span className="message-bubble__role">{displayName}</span>
         <time>
           {new Date(message.created_at).toLocaleTimeString([], {
             hour: "2-digit",
@@ -42,6 +45,7 @@ MessageBubble.propTypes = {
     role: PropTypes.oneOf(["user", "agent", "system"]).isRequired,
     text: PropTypes.string.isRequired,
     created_at: PropTypes.string.isRequired,
+    username: PropTypes.string, // 添加username字段
     emotion_label: PropTypes.string,
     emotion_score: PropTypes.number,
     voice_style: PropTypes.string,

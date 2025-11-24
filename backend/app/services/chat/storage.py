@@ -66,6 +66,11 @@ class ChatStorage:
                 ON messages(username)
             """)
             
+            conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_messages_username 
+                ON messages(username)
+            """)
+            
             conn.commit()
     
     def save_thread(
@@ -135,7 +140,7 @@ class ChatStorage:
                 )
                 for row in rows
             ]
-    
+
     def save_message(self, message: ChatMessage, username: str = None):
         """Save a message"""
         with sqlite3.connect(self.db_path) as conn:

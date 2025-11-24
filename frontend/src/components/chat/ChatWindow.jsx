@@ -7,6 +7,7 @@ import VideoDisplay from "../VideoDisplay.jsx";
 export default function ChatWindow({
   thread,
   messages,
+  recentMessages,
   loading,
   onSend,
   emotionData,
@@ -187,7 +188,7 @@ export default function ChatWindow({
         )}
       </div>
 
-      <MessageList messages={messages} loading={loading} />
+      <MessageList messages={messages} recentMessages={recentMessages} loading={loading} />
       <MessageComposer onSend={onSend} disabled={!thread} />
     </div>
   );
@@ -199,9 +200,10 @@ ChatWindow.propTypes = {
     title: PropTypes.string,
     participants: PropTypes.arrayOf(PropTypes.string),
   }),
-  messages: PropTypes.arrayOf(PropTypes.object).isRequired,
+  messages: PropTypes.array,
+  recentMessages: PropTypes.array,
   loading: PropTypes.bool,
-  onSend: PropTypes.func.isRequired,
+  onSend: PropTypes.func,
   emotionData: PropTypes.object,
   onEmotionUpdate: PropTypes.func,
 };

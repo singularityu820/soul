@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import StarPortal from "./pages/StarPortal";
 import StarPortalPlanB from "./pages/StarPortalPlanB";
 import ChatApp from "./pages/ChatApp/ChatApp.jsx";
-import ChatNew from "./pages/ChatNew";
+import ChatNew from "./pages/ChatNew/index.jsx";
+import UserCenter from "./pages/UserCenter";
 import NotFound from "./pages/NotFound";
 import RouteSwitcher from "./components/RouteSwitcher.jsx";
 const normalizeHash = () => {
@@ -19,6 +20,7 @@ export default function App() {
       // "#/portal": StarPortal,
       "#/portal-planb": StarPortalPlanB,
       "#/chatnew": ChatNew,
+      "#/user": UserCenter,
     }),
     []
   );
