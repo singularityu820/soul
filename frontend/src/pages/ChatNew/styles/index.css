@@ -524,13 +524,15 @@
   padding-bottom: 20px;
 }
 
-/* 语音录制按钮容器 - 单独一行，固定在底部，浮动显示 */
-.chatnew-audio-record-container {
+/* 语音通话控制容器 - 固定在底部，包含四个按钮 */
+.chatnew-voice-controls-container {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
   width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
   padding: 20px;
   display: flex;
   justify-content: center;
@@ -540,9 +542,10 @@
   pointer-events: none; /* 让容器本身不拦截点击事件 */
 }
 
-/* 按钮本身可以接收点击事件 */
-.chatnew-audio-record-container > * {
+/* 控件本身可以接收点击事件 */
+.chatnew-voice-controls-container > * {
   pointer-events: auto;
+  width: 100%;
 }
 
 .chatnew-message {

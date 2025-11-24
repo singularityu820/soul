@@ -1,0 +1,250 @@
+/* VoiceCallControls.css */
+
+.voice-call-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+}
+
+/* 状态显示区域 */
+.voice-call-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: all 0.3s ease;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.status-idle .status-dot {
+  background: #95a5a6;
+  animation: none;
+}
+
+.status-connecting .status-dot {
+  background: #f39c12;
+}
+
+.status-active .status-dot {
+  background: #27ae60;
+}
+
+.status-paused .status-dot {
+  background: #e67e22;
+  animation: none;
+}
+
+.status-idle {
+  background: #ecf0f1;
+  color: #7f8c8d;
+}
+
+.status-connecting {
+  background: #fef5e7;
+  color: #d68910;
+}
+
+.status-active {
+  background: #d5f4e6;
+  color: #1e8449;
+}
+
+.status-paused {
+  background: #fdebd0;
+  color: #ba4a00;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.2);
+  }
+}
+
+/* 转录显示 */
+.voice-call-transcript {
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.transcript-user {
+  color: #2c3e50;
+  margin-bottom: 0.5rem;
+}
+
+.transcript-user strong {
+  color: #3498db;
+}
+
+.transcript-ai {
+  color: #34495e;
+}
+
+.transcript-ai strong {
+  color: #9b59b6;
+}
+
+/* 错误提示 */
+.voice-call-error {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  background: #fadbd8;
+  color: #c0392b;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.error-icon {
+  font-size: 1rem;
+}
+
+/* 按钮区域 */
+.voice-call-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.voice-call-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  padding: 1rem 0.5rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.voice-call-btn svg {
+  width: 24px;
+  height: 24px;
+  transition: transform 0.2s ease;
+}
+
+.voice-call-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.voice-call-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.voice-call-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 开始通话按钮 */
+.voice-call-btn-start {
+  background: linear-gradient(135deg, #27ae60, #2ecc71);
+  color: white;
+}
+
+.voice-call-btn-start:hover:not(:disabled) {
+  background: linear-gradient(135deg, #229954, #27ae60);
+}
+
+/* 暂停/恢复按钮 */
+.voice-call-btn-pause {
+  background: linear-gradient(135deg, #f39c12, #f1c40f);
+  color: white;
+}
+
+.voice-call-btn-pause:hover:not(:disabled) {
+  background: linear-gradient(135deg, #d68910, #f39c12);
+}
+
+.voice-call-btn-pause.paused {
+  background: linear-gradient(135deg, #3498db, #5dade2);
+}
+
+.voice-call-btn-pause.paused:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2874a6, #3498db);
+}
+
+/* 挂断按钮 */
+.voice-call-btn-hangup {
+  background: linear-gradient(135deg, #e74c3c, #ec7063);
+  color: white;
+}
+
+.voice-call-btn-hangup:hover:not(:disabled) {
+  background: linear-gradient(135deg, #c0392b, #e74c3c);
+}
+
+/* 语音消息按钮 */
+.voice-call-btn-send {
+  background: linear-gradient(135deg, #9b59b6, #bb8fce);
+  color: white;
+}
+
+.voice-call-btn-send:hover:not(:disabled) {
+  background: linear-gradient(135deg, #7d3c98, #9b59b6);
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .voice-call-buttons {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .voice-call-btn {
+    padding: 0.75rem 0.5rem;
+    font-size: 0.7rem;
+  }
+  
+  .voice-call-btn svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .voice-call-controls {
+    padding: 1rem;
+  }
+  
+  .voice-call-buttons {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+}

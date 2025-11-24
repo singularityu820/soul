@@ -31,6 +31,8 @@ export default function AudioRecordButton({
     transcript: streamTranscript,
     response: streamResponse,
     error: streamError,
+    isAudioPlaying,
+    isResponseComplete,
     connect,
     disconnect,
     startRecording,
@@ -43,10 +45,18 @@ export default function AudioRecordButton({
     setAutoStreaming(!simulateMode);
   }, [simulateMode]);
 
+  // 处理主动断开连接的情况（模拟模式、禁用等）
   useEffect(() => {
     if (simulateMode || !threadId || disabled || !autoStreaming) {
       stopRecording();
       disconnect();
+      return;
+    }
+  }, [simulateMode, threadId, disabled, autoStreaming, stopRecording, disconnect]);
+
+  // 建立连接
+  useEffect(() => {
+    if (simulateMode || !threadId || disabled || !autoStreaming) {
       return;
     }
 
@@ -67,20 +77,28 @@ export default function AudioRecordButton({
     return () => {
       cancelled = true;
       stopRecording();
-      disconnect();
+      // 注意：不在这里 disconnect()，保持连接用于下一轮对话
+      // 只在组件卸载或 simulateMode/disabled 变化时才断开
     };
-  }, [simulateMode, autoStreaming, threadId, disabled, connect, disconnect, stopRecording]);
+  }, [simulateMode, autoStreaming, threadId, disabled, connect, stopRecording]);
 
+  // 自动开始录音逻辑 - 但只在首次连接或上一轮对话完成后
   useEffect(() => {
     if (simulateMode || !autoStreaming || disabled) return;
     if (!threadId) return;
     if (!isConnected || isRecording) return;
+    
+    // 如果正在播放音频或还有音频队列，等待播放完成
+    if (isAudioPlaying) {
+      console.log('[AudioRecordButton] Waiting for audio playback to finish before recording');
+      return;
+    }
 
     startRecording().catch((err) => {
       console.error("Auto start recording failed", err);
       setConnectionError(err.message || "无法开始语音");
     });
-  }, [simulateMode, autoStreaming, disabled, threadId, isConnected, isRecording, startRecording]);
+  }, [simulateMode, autoStreaming, disabled, threadId, isConnected, isRecording, isAudioPlaying, startRecording]);
 
   // 实时展示后端推送的结果
   useEffect(() => {

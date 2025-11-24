@@ -235,7 +235,7 @@ function CanvasWaveformChart({ waveform, transparent = false }) {
     
     // 标记为已初始化
     setIsInitialized(true);
-  }, [waveform, mergeChannels, updateBuffer]);
+  }, [waveform]); // 移除 mergeChannels 和 updateBuffer 依赖以避免无限循环
   
   // 启动动画循环和定时更新
   useEffect(() => {

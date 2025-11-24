@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./styles/index.css";
 import backgroundImg from "./styles/img/background.jpg";
-import AudioRecordButton from "../../components/AudioRecordButton.jsx";
+import VoiceCallControls from "../../components/VoiceCallControls.jsx";
 import EEGWaveformDisplay from "../../components/EEGWaveformDisplay.jsx";
 import EEGDeviceControlPanel from "../../components/EEGDeviceControlPanel.jsx";
 import ChatApp from "./ChatAppCopy.jsx";
@@ -26,7 +26,6 @@ const CHAT_WS_OPTIONS = {
 };
 
 export default function ChatNew() {
-  const [messages, setMessages] = useState([]);
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [chatStatus, setChatStatus] = useState("idle");
   const [isEntering, setIsEntering] = useState(true);
@@ -49,14 +48,7 @@ export default function ChatNew() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 自动滚动到底部
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // （消息显示由左侧 ChatApp 处理，避免右侧重复展示）
 
   // 初始化或获取thread（与ChatApp保持一致）
   const initializeThread = useCallback(async () => {
@@ -137,86 +129,50 @@ export default function ChatNew() {
     };
   }, []);
 
-  // WebSocket连接 - 接收消息
-  useEffect(() => {
+  // Chat messages 由左侧 ChatApp（ChatAppCopy）通过其自己的 WebSocket 管理并显示。
+  // 这里不再在右侧重复建立 WebSocket 或本地消息状态，避免重复渲染与刷新。
+
+  // 将语音通话产生的消息发送到后端，由后端广播并由 ChatApp 的 WebSocket 接收显示
+  const addSelfMessage = async (text) => {
     if (!activeThreadId) return;
-
-    setMessages([]);
-    messageIdsRef.current = new Set();
-
-    // 如果是模拟模式，不需要建立WebSocket连接
-    if (activeThreadId.startsWith('default-')) {
-      setChatStatus("connected");
-      return;
+    try {
+      await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('Failed to post self message', err);
     }
+  };
 
-    const url = resolveWebSocketUrl(`/ws/chat?thread_id=${activeThreadId}`, CHAT_WS_OPTIONS);
-    const socket = new WebSocket(url);
-    chatSocketRef.current = socket;
-
-    socket.onopen = () => {
-      setChatStatus("connected");
-    };
-    socket.onclose = () => {
-      setChatStatus("disconnected");
-    };
-    socket.onerror = () => {
-      setChatStatus("error");
-    };
-    socket.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        if (payload.type !== "message") return;
-        const { message } = payload;
-        if (message.thread_id !== activeThreadId) return;
-        if (messageIdsRef.current.has(message.message_id)) return;
-        messageIdsRef.current.add(message.message_id);
-        
-        // 直接使用后端消息格式，ChatWindow会处理
-        setMessages((prev) => 
-          [...prev, message].sort((a, b) => 
-            new Date(a.created_at) - new Date(b.created_at)
-          )
-        );
-      } catch (error) {
-        console.error("Failed to parse chat event", error);
-      } finally {
-      }
-    };
-
-    return () => {
-      socket.close();
-      chatSocketRef.current = null;
-    };
-  }, [activeThreadId]);
-
-  const addSelfMessage = (text) => {
-    const message = {
-      message_id: uuidv4(),
-      thread_id: activeThreadId,
-      sender: "me",
-      text: text.trim(),
-      created_at: new Date().toISOString(),
-    };
-    console.log("Add self message:", message);
-    setMessages((prev) => [...prev, message]);
-  }
-
-  const addAiMessage = (text) => {
-    const message = {
-      message_id: uuidv4(),
-      thread_id: activeThreadId,
-      sender: "ai",
-      text: text.trim(),
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, message]);
-  }
+  const addAiMessage = async (text) => {
+    if (!activeThreadId) return;
+    try {
+      // 以 system/assistant 身份写入 AI 消息（后端可能根据权限忽略此写入）
+      await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, role: 'assistant' }),
+        credentials: 'include',
+      });
+    } catch (err) {
+      console.error('Failed to post AI message', err);
+    }
+  };
 
   // 处理语音响应
   const handleAudioResponse = useCallback((result) => {
     console.log("Audio response received:", result);
     // ChatWindow会通过WebSocket接收消息，这里不需要手动添加
+  }, []);
+
+  // 处理挂断通话（返回用户界面）
+  const handleHangup = useCallback(() => {
+    console.log("Call ended, returning to chat interface");
+    // 可以添加导航逻辑或状态重置
+    // 例如：navigate('/') 或重置消息列表
   }, []);
 
   return (
@@ -270,44 +226,18 @@ export default function ChatNew() {
           </div>
         </div>
 
-        {/* 右侧消息区域 - 暂时保留，但ChatWindow会处理消息显示 */}
-        <div className="chatnew-messages-wrapper">
-          <div className="chatnew-messages" ref={messagesContainerRef}>
-            {messages.length === 0 ? (
-              <div className="chatnew-empty">
-                <p>开始一段对话吧...</p>
-              </div>
-            ) : (
-              messages.map((message) => (
-                <div 
-                  key={message.message_id || message.id} 
-                  className={`chatnew-message ${message.sender === 'me' || message.speaker === 'me' || message.role === 'user' ? 'chatnew-message--user' : 'chatnew-message--ai'}`}
-                >
-                  <div className="chatnew-message-content">
-                    {message.content || message.text}
-                  </div>
-                  <div className="chatnew-message-time">
-                    {new Date(message.created_at || Date.now()).toLocaleTimeString("zh-CN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </div>
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </div>
+        {/* 右侧消息区域已移除，消息显示由左侧 ChatApp（ChatWindow）负责，避免重复 */}
       </div>
       
-      {/* 语音录制按钮区域 - 单独一行 */}
-      <div className="chatnew-audio-record-container">
-        <AudioRecordButton
+      {/* 语音通话控制区域 - 四个按钮 */}
+      <div className="chatnew-voice-controls-container">
+        <VoiceCallControls
           threadId={activeThreadId}
           onResponse={handleAudioResponse}
-          disabled={!activeThreadId || chatStatus !== "connected"}
+          disabled={!activeThreadId}
           addSelfMessage={addSelfMessage}
           addAiMessage={addAiMessage}
+          onHangup={handleHangup}
         />
       </div>
       

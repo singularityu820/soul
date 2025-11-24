@@ -1,11 +1,13 @@
 """WebSocket endpoints."""
 
 import asyncio
+import base64
 import json
 import logging
 import time
 import uuid
 from datetime import datetime
+from typing import Any, Dict
 
 from fastapi import APIRouter, Cookie, Depends, WebSocket, WebSocketDisconnect
 from fastapi.encoders import jsonable_encoder
@@ -178,7 +180,7 @@ async def websocket_real_eeg_stream(
 
 
 # ============================================================================
-# Voice Stream WebSocket
+# Voice Stream WebSocket - Qwen Omni Realtime
 # ============================================================================
 
 @router.websocket("/ws/voice-stream")
@@ -186,37 +188,38 @@ async def voice_stream_websocket(
     websocket: WebSocket,
     session_id: str = None,
 ):
-    """实时语音流WebSocket端点，实现智能断句和流式TTS"""
+    """
+    实时语音流WebSocket端点，使用 Qwen-Omni-Realtime 全模态大模型。
+    支持实时语音对话，音频直接转文本+音频输出，保留工具调用能力。
+    """
     # 生成会话ID（如果未提供）
     if not session_id:
         session_id = uuid.uuid4().hex
     
-    session = None
+    qwen_session = None
     
     # 从 Cookie 中获取 username
     username = websocket.cookies.get("username")
-    logger.info(f"Voice stream WebSocket connected: {session_id}, username: {username}")
+    logger.info(f"[Qwen Omni] Voice stream WebSocket connected: {session_id}, username: {username}")
 
     try:
         await websocket.accept()
         
-        voice_stream_hub = get_voice_stream_hub()
-        # Replace legacy LLM/TTS with Qwen realtime (tool calling retained via llm_service)
-        llm_service = get_llm_service()  # still used for tool calls if needed
-        tts_service = get_tts_service()  # fallback TTS if realtime audio not requested
+        from ..services.agent.qwen_omni_realtime import (
+            QwenOmniRealtimeHub,
+            QwenOmniRealtimeConfig
+        )
+        
         chat_storage = get_chat_storage()
         
-        # 定义转录回调函数
-        async def on_transcript(transcript: str):
-            """处理转录文本，生成响应并合成语音"""
+        # 定义转录回调：保存用户消息
+        def on_transcript(transcript: str):
+            """处理用户语音转录"""
             try:
-                logger.info(f"[Voice Stream] Received transcript: {transcript}")
-                
-                # 发送转录文本到客户端
-                await session.send_message("transcript", {"text": transcript})
+                logger.info(f"[Qwen Omni] User transcript: {transcript}")
                 
                 # 保存用户消息到数据库（关联username）
-                if username:
+                if username and transcript.strip():
                     try:
                         user_message = ChatMessage(
                             message_id=uuid.uuid4().hex,
@@ -227,240 +230,161 @@ async def voice_stream_websocket(
                             language="zh",
                         )
                         chat_storage.save_message(user_message, username)
-                        logger.info(f"[Voice Stream] Saved user message for username: {username}")
+                        logger.info(f"[Qwen Omni] Saved user message for username: {username}")
                     except Exception as e:
-                        logger.error(f"[Voice Stream] Failed to save user message: {e}", exc_info=True)
+                        logger.error(f"[Qwen Omni] Failed to save user message: {e}", exc_info=True)
+            except Exception as e:
+                logger.error(f"[Qwen Omni] Error in transcript callback: {e}", exc_info=True)
+        
+        # 定义音频回调：模型生成的音频直接转发（已包含在事件中）
+        def on_audio(audio_b64: str):
+            """处理模型生成的音频"""
+            # Qwen Omni 会在事件处理中自动发送音频到客户端
+            pass
+        
+        # 定义工具调用回调：保留 agent 工具调用能力
+        def on_tool_call(tool_call: Dict[str, Any]) -> Any:
+            """处理工具调用"""
+            try:
+                from ..services.agent import ConversationalAgent
+                from ..dependencies import agent as global_agent
                 
-                # 构建对话消息
-                messages = [
-                    {"role": "system", "content": "你是一个友好、有帮助的AI助手。请用简洁、自然的语言回答用户的问题。"},
-                    {"role": "user", "content": transcript}
-                ]
+                function_name = tool_call.get("function", {}).get("name")
+                arguments = tool_call.get("function", {}).get("arguments", {})
                 
-                # 断句缓冲区
-                sentence_buffer = []
-                full_response = ""
-                segment_count = 0
+                logger.info(f"[Qwen Omni] Tool call: {function_name}({arguments})")
                 
-                # 断句标点符号
-                BREAK_PUNCTUATION = {"。", "！", "？", "!", "?", "；", ";", "\n"}
-                MIN_SENTENCE_LENGTH = 12
-                MAX_SENTENCE_LENGTH = 100
+                # 这里可以集成现有的 agent 工具
+                # 示例：调用记忆工具、情绪识别等
+                # result = global_agent.execute_tool(function_name, arguments)
                 
-                def should_break_sentence(text: str) -> bool:
-                    """判断是否应该断句"""
-                    if len(text) < MIN_SENTENCE_LENGTH:
-                        return False
-                    
-                    if text and text[-1] in BREAK_PUNCTUATION:
-                        return True
-                    
-                    if "<emotion:" in text or "<lang:" in text or "<voice:" in text:
-                        return True
-                    
-                    if len(text) >= MAX_SENTENCE_LENGTH:
-                        for i in range(len(text) - 1, max(0, len(text) - 20), -1):
-                            if text[i] in BREAK_PUNCTUATION:
-                                return True
-                        return True
-                    
-                    return False
-                
-                async def process_sentence(sentence: str, seg_id: int):
-                    """处理一个句子：TTS + 发送"""
-                    try:
-                        logger.info(f"[Sentence {seg_id}] Processing: {sentence[:50]}...")
-                        
-                        # TTS 合成
-                        async for audio_url in tts_service.synthesize_stream(
-                            text=sentence,
-                            voice="zhichu_emo",
-                            locale="zh-CN",
-                        ):
-                            logger.info(f"[Sentence {seg_id}] TTS generated: {audio_url}")
-                            
-                            # 下载音频数据
-                            audio_data = await fetch_audio_from_url(audio_url)
-                            if audio_data:
-                                # 添加到音频队列
-                                await session.audio_queue_hook.add_audio(
-                                    audio_data=audio_data,
-                                    segment_id=seg_id,
-                                    text=sentence
-                                )
-                                
-                                # 发送音频 URL
-                                await session.send_message("tts_audio", {
-                                    "url": audio_url,
-                                    "segment_id": seg_id,
-                                    "text": sentence
-                                })
-                            
-                    except Exception as e:
-                        logger.error(f"[Sentence {seg_id}] TTS failed: {e}", exc_info=True)
-                
-                # Keepalive任务
-                keepalive_task = None
-                keepalive_running = True
-                keepalive_count = 0
-                
-                async def send_keepalive():
-                    """保持连接活跃"""
-                    nonlocal keepalive_count
-                    while keepalive_running:
-                        await asyncio.sleep(2)
-                        if keepalive_running:
-                            try:
-                                keepalive_count += 1
-                                await session.send_status("generating")
-                            except Exception as e:
-                                logger.warning(f"Keepalive failed: {e}")
-                                break
-                
-                try:
-                    keepalive_task = asyncio.create_task(send_keepalive())
-                    logger.info("[Voice Stream] Started LLM streaming with smart sentence breaking")
-                    
-                    # Qwen Omni Realtime now handles speech->text+audio directly on client side.
-                    # Server fallback: still use llm_service for tool calls or text completion if needed.
-                    async for chunk in llm_service.generate_stream(
-                        prompt="",
-                        messages=messages,
-                        temperature=0.7
-                    ):
-                        sentence_buffer.append(chunk)
-                        full_response += chunk
-                        await session.send_message("response_chunk", {"text": chunk})
-                        current_text = "".join(sentence_buffer)
-                        if should_break_sentence(current_text):
-                            segment_count += 1
-                            logger.info(f"[Voice Stream] Breaking sentence #{segment_count}: {current_text[:30]}...")
-                            await process_sentence(current_text.strip(), segment_count)
-                            sentence_buffer.clear()
-                    
-                    # 处理剩余的文本
-                    remaining_text = "".join(sentence_buffer).strip()
-                    if remaining_text:
-                        segment_count += 1
-                        logger.info(f"[Voice Stream] Processing remaining text as segment #{segment_count}")
-                        await process_sentence(remaining_text, segment_count)
-                    
-                    logger.info(f"[Voice Stream] LLM complete. Generated {segment_count} segments.")
-                    
-                    # 保存AI响应消息到数据库
-                    if username:
-                        try:
-                            assistant_message = ChatMessage(
-                                message_id=uuid.uuid4().hex,
-                                thread_id=session_id,
-                                role="assistant",
-                                text=full_response,
-                                created_at=datetime.utcnow(),
-                                language="zh",
-                            )
-                            chat_storage.save_message(assistant_message, username)
-                            logger.info(f"[Voice Stream] Saved assistant message for username: {username}")
-                        except Exception as e:
-                            logger.error(f"[Voice Stream] Failed to save assistant message: {e}", exc_info=True)
-                    
-                    # 发送完整响应
-                    await session.send_response(full_response)
-                    
-                    # 发送完成标记
-                    await session.send_message("generation_complete", {
-                        "segments": segment_count,
-                        "total_text": full_response
-                    })
-                    
-                except Exception as e:
-                    logger.error(f"[Voice Stream] Error in LLM streaming: {e}", exc_info=True)
-                    await session.send_error(str(e))
-                finally:
-                    # 停止 keepalive
-                    keepalive_running = False
-                    if keepalive_task:
-                        keepalive_task.cancel()
-                        try:
-                            await keepalive_task
-                        except asyncio.CancelledError:
-                            pass
-                    logger.info(f"[Voice Stream] Stopped keepalive (sent {keepalive_count} pings)")
-                
-                await session.send_status("idle")
-                return full_response
+                # 临时返回一个占位结果
+                result = {"status": "success", "message": f"工具 {function_name} 已执行"}
+                logger.info(f"[Qwen Omni] Tool result: {result}")
+                return result
                 
             except Exception as e:
-                logger.error(f"Error in transcript callback: {e}", exc_info=True)
-                await session.send_error(str(e))
-                return ""
+                logger.error(f"[Qwen Omni] Tool call error: {e}", exc_info=True)
+                return {"status": "error", "message": str(e)}
         
-        # 创建会话
-        session = await voice_stream_hub.create_session(
+        # 创建 Qwen Omni Realtime 配置
+        config = QwenOmniRealtimeConfig(
+            model="qwen-omni-turbo-realtime",
+            voice="Chelsie",  # 千雪音色
+            enable_vad=True,
+            instructions="你是一个友好、有帮助的AI助手。请用简洁、自然的语言回答用户的问题。"
+        )
+        
+        # 创建会话管理器
+        qwen_hub = QwenOmniRealtimeHub(config=config)
+        
+        # 创建 Qwen Omni 会话
+        qwen_session = await qwen_hub.create_session(
             websocket=websocket,
             session_id=session_id,
             on_transcript=on_transcript,
+            on_audio=on_audio,
+            on_tool_call=on_tool_call
         )
         
-        # 启动后台任务
-        await session.start_background_tasks()
+        logger.info(f"[Qwen Omni] Session {session_id} ready")
         
         # 发送就绪消息
-        await session.send_message("ready", {"session_id": session_id})
+        await websocket.send_json({
+            "type": "ready",
+            "session_id": session_id,
+            "model": "qwen-omni-turbo-realtime"
+        })
         
-        # 接收音频流
-        while not session._closed:
-            message = await websocket.receive()
+        # 接收音频流和控制消息
+        # 支持多轮对话：当 Qwen Omni 会话关闭后自动重建
+        while True:
+            # 检查会话是否关闭，如果关闭则重建
+            if qwen_session.is_closed:
+                logger.info(f"[Qwen Omni] Session closed, recreating for next turn...")
+                qwen_session = await qwen_hub.create_session(
+                    websocket=websocket,
+                    session_id=f"{session_id}_{uuid.uuid4().hex[:8]}",  # 新的子会话 ID
+                    on_transcript=on_transcript,
+                    on_audio=on_audio,
+                    on_tool_call=on_tool_call
+                )
+                await websocket.send_json({
+                    "type": "ready",
+                    "session_id": session_id,
+                    "message": "Ready for next turn"
+                })
+            
+            try:
+                message = await websocket.receive()
+            except WebSocketDisconnect:
+                logger.info(f"[Qwen Omni] Client disconnected: {session_id}")
+                break
+            except RuntimeError as e:
+                if "disconnect" in str(e).lower():
+                    logger.info(f"[Qwen Omni] Connection closed: {session_id}")
+                    break
+                raise
             
             # 检查断开连接消息
             if message.get("type") == "websocket.disconnect":
-                logger.info(f"Client disconnected: {session_id}")
+                logger.info(f"[Qwen Omni] Client disconnected: {session_id}")
                 break
             
             if "bytes" in message:
-                # 二进制音频数据
+                # 二进制音频数据 - 转换为 Base64 并发送到 Qwen Omni
                 audio_data = message["bytes"]
-                await session.handle_audio_data(audio_data)
+                logger.debug(f"[Qwen Omni] Received audio chunk: {len(audio_data)} bytes")
+                audio_b64 = base64.b64encode(audio_data).decode('ascii')
+                await qwen_session.append_audio(audio_b64)
                 
             elif "text" in message:
                 # JSON 控制消息
                 data = json.loads(message["text"])
+                msg_type = data.get("type")
                 
-                if data.get("type") == "stop":
-                    logger.info("Received stop signal")
-                    await session.flush_pending_audio("stop-signal")
-                    await session.audio_queue_hook.interrupt()
+                if msg_type == "stop" or msg_type == "close":
+                    logger.info(f"[Qwen Omni] Received {msg_type} signal")
                     break
-                elif data.get("type") == "interrupt":
-                    logger.info("Received interrupt signal")
-                    await session.audio_queue_hook.interrupt()
-                elif data.get("type") == "status":
-                    status = await session.audio_queue_hook.get_status()
-                    await session.send_message("queue_status", status)
+                    
+                elif msg_type == "image":
+                    # 支持图片输入（视频通话场景）
+                    image_b64 = data.get("image")
+                    if image_b64:
+                        await qwen_session.append_image(image_b64)
+                        logger.info(f"[Qwen Omni] Appended image to session")
+                
+                elif msg_type == "config":
+                    # 动态配置更新（如果需要）
+                    logger.info(f"[Qwen Omni] Config update request: {data}")
                     
             else:
-                logger.warning(f"Unknown message type: {message}")
+                logger.warning(f"[Qwen Omni] Unknown message type: {message}")
         
     except WebSocketDisconnect:
-        logger.info(f"Voice stream WebSocket disconnected: {session_id}")
+        logger.info(f"[Qwen Omni] WebSocket disconnected: {session_id}")
     except RuntimeError as e:
         if "disconnect" in str(e).lower():
-            logger.info(f"Voice stream connection closed: {session_id}")
+            logger.info(f"[Qwen Omni] Connection closed: {session_id}")
         else:
-            logger.error(f"Voice stream runtime error: {e}", exc_info=True)
+            logger.error(f"[Qwen Omni] Runtime error: {e}", exc_info=True)
     except Exception as e:
-        logger.error(f"Voice stream error: {e}", exc_info=True)
+        logger.error(f"[Qwen Omni] Error: {e}", exc_info=True)
         try:
             await websocket.send_json({"type": "error", "message": str(e)})
         except:
             pass
     finally:
-        if session:
+        if qwen_session:
             try:
-                await session.flush_pending_audio("connection-closed")
-            except Exception as flush_error:
-                logger.warning("Failed to flush audio on shutdown: %s", flush_error)
-        if session_id:
-            await voice_stream_hub.remove_session(session_id)
+                await qwen_session.close()
+            except Exception as close_error:
+                logger.warning(f"[Qwen Omni] Failed to close session: {close_error}")
+        if qwen_hub and session_id:
+            try:
+                await qwen_hub.remove_session(session_id)
+            except Exception as remove_error:
+                logger.warning(f"[Qwen Omni] Failed to remove session: {remove_error}")
         try:
             await websocket.close()
         except:

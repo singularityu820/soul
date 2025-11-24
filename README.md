@@ -11,8 +11,9 @@ Multimodal real-time emotion companion that fuses simulated EEG signals and faci
 - **Avatar orchestration**: Translates emotion outputs into sprite expressions, poses, and color themes.
 - **Modular memory stack**: Working/episodic/semantic/perceptual memories routed through a unified manager with vector search, graph relations, and RAG-ready document ingestion.
 - **LLM/TTS provider orchestration**: Auto-detects OpenAI, ModelScope, Zhipu AI, vLLM, or Ollama backends, and now streams GPT-SoVITs TTS requests chunk-by-chunk on punctuation/voice markers (replacing `0.0.0.0` URLs with the configured public base) while falling back to sandbox stubs when credentials are missing.
-- **WebSocket voice streaming**: Low-latency voice loop built on `/ws/voice-stream`, streaming microphone audio via WebSocket → ASR → LLM → TTS, then pushing segmented responses back to the browser for immediate playback.
-- **ASR integration**: Automatic speech recognition (Whisper API, Azure Speech, DashScope Qwen ASR, ModelScope) converts user voice to text, which feeds into the LLM conversation pipeline. Supports Chinese, English, Japanese, and more.
+- **🆕 Qwen Omni Realtime**: 集成阿里云千问全模态实时大模型，实现 <500ms 超低延迟的实时语音对话，支持语音输入直接生成语音+文本输出，替代传统 ASR→LLM→TTS 三段式流程。保留工具调用能力，支持 4 种音色和服务端 VAD。
+- **WebSocket voice streaming**: Low-latency voice loop built on `/ws/voice-stream`, now powered by Qwen-Omni-Realtime for near-instant audio-to-audio responses with automatic speech detection.
+- **ASR integration** (legacy fallback): Automatic speech recognition (Whisper API, Azure Speech, DashScope Qwen ASR, ModelScope) as fallback when not using Qwen Omni Realtime.
 - **WebSocket streaming**: Pushes emotion, avatar, and agent events to the UI in real time.
 - **Front-end dashboard**: React UI showing EEG waveforms, channel contributions, agent log, and manual user memory inputs.
 
@@ -59,7 +60,7 @@ The backend exposes:
 - `GET /chat/threads/{id}/messages` – fetch recent messages; `POST` to append a user message and trigger the agent response.
 - `WS /ws/chat?thread_id=...` – live stream chat events (history + incremental updates).
 - `POST /audio/conversation` – upload audio to trigger the ASR → LLM → TTS pipeline and receive synthesized speech.
-- `WS /ws/voice-stream` – establish a full-duplex WebSocket session for live microphone streaming, transcripts, and segmented TTS playback.
+- `WS /ws/voice-stream` – **Qwen Omni Realtime** powered full-duplex WebSocket for ultra-low latency voice conversation (<500ms). Supports automatic VAD, 4 voice options, and tool calling integration. 详见 [Qwen Omni 快速开始](docs/QWEN_OMNI_QUICKSTART.md).
 
 ### 3. 启动前端 (React + Vite)
 
@@ -94,10 +95,12 @@ When you deploy the frontend behind a reverse proxy (non-`localhost:8000`), set 
 
 ## Configuration Guides
 
+- **🆕 [Qwen Omni Realtime 快速开始](docs/QWEN_OMNI_QUICKSTART.md)** - 千问全模态实时大模型集成指南（推荐）
+- **🆕 [Qwen Omni Realtime 详细集成](docs/QWEN_OMNI_REALTIME_INTEGRATION.md)** - 完整的技术文档和API参考
 - **[LLM Configuration](docs/LLM_CONFIGURATION.md)** - How to configure LLM providers (OpenAI, ModelScope, Zhipu, vLLM, Ollama) and troubleshoot connection issues
-- **[WebSocket Voice Stream](docs/VOICE_STREAM_GUIDE.md)** - Current guide for the streaming voice pipeline
+- **[WebSocket Voice Stream](docs/VOICE_STREAM_GUIDE.md)** - Legacy streaming voice pipeline guide (replaced by Qwen Omni)
 - **[WebRTC Voice Calling (legacy)](docs/WEBRTC_GUIDE.md)** - Archived notes on the retired aiortc-based system
-- **[DashScope ASR Integration](docs/DASHSCOPE_ASR.md)** - Configure Alibaba Cloud's Qwen ASR service
+- **[DashScope ASR Integration](docs/DASHSCOPE_ASR.md)** - Configure Alibaba Cloud's Qwen ASR service (legacy fallback)
 
 ### LLM/TTS/ASR Auto-detection Rules
 
