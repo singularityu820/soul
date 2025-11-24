@@ -19,33 +19,47 @@ export default function Diary() {
   const isTurningRef = useRef(false); // 标记是否正在翻页，防止重复触发
 
   // 每页的文字内容（可按实际需求修改）
+  // 每页的文字内容
   const pageTexts = useMemo(() => {
     const texts = [
       "", // 封面页无文字（第 0 页）
-      "",
-      "",
-      "",
-      "",
-      ""
+      "星空下的第一页日记...",
+      "记录每一天的心情与感悟",
+      "星光指引我们前行的方向",
+      "每一页都是一段美好的回忆",
+      "让星光守护我们的故事"
     ];
     // 同时保存到 ref，方便在回调中访问
     pageTextsRef.current = texts;
     return texts;
   }, []);
 
+  // 加载日记页面图片
   const pages = useMemo(() => {
-    const modules = import.meta.glob("../styles/img/diary-lock-*.jpg", { eager: true });
-    const items = Object.entries(modules)
-      .map(([path, mod]) => {
-        const match = path.match(/diary-lock-(\d+)\.jpg$/);
-        const num = match ? parseInt(match[1], 10) : 0;
-        return { num, url: mod.default };
-      })
-      .filter((it) => it.num > 0)
-      .sort((a, b) => a.num - b.num)
-      .map((it) => it.url);
-    return items.length ? items : [];
+    // 使用img/diary目录中的图片
+    const images = [
+      "/img/diary/diaryPage1.jpg",
+      "/img/diary/diaryPage2.jpg",
+      "/img/diary/diaryPage3.jpg",
+      "/img/diary/diaryPage4.jpg",
+      "/img/diary/diaryPage5.jpg",
+      "/img/diary/diaryPage6.jpg"
+    ];
+    return images;
   }, []);
+
+  // 加载日记文本背景图片（可选）
+  const textBackgrounds = useMemo(() => {
+    const backgrounds = [
+      "./img/diary/diaryText1.jpg",
+      "./img/diary/diaryText2.jpg",
+      "./img/diary/diaryText3.jpg",
+      "./img/diary/diaryText4.jpg",
+      "./img/diary/diaryText5.jpg",
+      "./img/diary/diaryText6.jpg"
+    ];
+    return backgrounds;
+  }, [])
 
   const computeSize = useCallback(() => {
     const parent = containerRef.current;
@@ -54,7 +68,8 @@ export default function Diary() {
     // 单页：竖版比例 3:4（w:h）
     const w = Math.max(280, Math.floor(maxW));
     const h = Math.min(Math.floor(w * (4 / 3)), Math.floor(window.innerHeight * 0.7));
-    return { w, h };
+    // 宽度设为原来的180%，高度设为原来的132%（增加10%）
+    return { w: Math.floor(w * 2.52), h: Math.floor(h * 1.32) };
   }, []);
 
   // 在容器挂载后计算封面尺寸，并监听窗口大小变化
@@ -78,16 +93,18 @@ export default function Diary() {
   }, [started, computeSize]);
 
   // 触发当前页文字逐个显示动画
-  // pageNum: Turn.js 页码（1=封面，2=第一页内容，3=第二页内容...）
+  // pageNum: Turn.js 页码（1=封面，2=第一页左页，3=第一页右页，依此类推...）
   const animateText = useCallback((pageNum) => {
 
-    // 封面页（第1页）不显示文字
-    if (pageNum === 1) {
+    // 封面页（第1页）和左侧页面（偶数页）不显示文字动画
+    // 只有右侧页面（奇数页，从3开始）才显示文字
+    if (pageNum === 1 || pageNum % 2 === 0) {
       return;
     }
 
-    // 将 Turn.js 页码转换为文字索引（页码-1，因为第1页是封面）
-    const textIndex = pageNum - 1;
+    // 将右侧页码转换为文字索引
+    // 第3页 -> 索引1，第5页 -> 索引2，以此类推
+    const textIndex = Math.floor((pageNum - 3) / 2) + 1;
 
     // 清除之前的动画定时器
     animationTimersRef.current.forEach(timer => clearTimeout(timer));
@@ -250,7 +267,7 @@ export default function Diary() {
                   targetEl.classList.remove("diary-text--typing");
                 }
               }
-            }, idx * 50); // 每个字符间隔 50ms，形成书写感
+            }, idx * 80); // 每个字符间隔 80ms，稍微加快速度
             animationTimersRef.current.push(timer);
           });
         }, 300);
@@ -260,7 +277,7 @@ export default function Diary() {
 
       // 开始查找元素并执行动画
       tryFind();
-    }, 500); // 等翻页动画完成（增加延迟确保 DOM 更新完成）
+    }, 700); // 增加延迟确保 DOM 更新完成
   }, [pageTexts]);
 
   // 同步 animateText 到 ref，确保 end 事件回调总是调用最新版本
@@ -339,62 +356,93 @@ export default function Diary() {
     let isHandling = false;
     let isInitialLoad = true; // 标志：是否为初始加载
 
+    // 页面切换时处理文字动画
     const handlePageChange = (event, page, view) => {
-      // 确保获取正确的页码（Turn.js 页码：1=封面，2=第一页内容，3=第二页内容...）
-      const pageNum = page || 1;
+      try {
+        // 确保获取正确的页码（Turn.js 页码：1=封面，2=第一页左页，3=第一页右页，依此类推...）
+        const pageNum = page || 1;
 
-      // 封面页（第1页）不显示文字
-      if (pageNum === 1) {
-        lastHandledPage = pageNum;
-        return;
-      }
-
-      // 如果是初始加载且是第1页，只记录页码，不触发动画
-      if (isInitialLoad && pageNum === 1) {
-        lastHandledPage = pageNum;
-        return;
-      }
-
-      // 第一次真正的翻页后，标记初始加载完成
-      if (isInitialLoad && pageNum !== 1) {
-        isInitialLoad = false;
-      }
-
-      // 防抖：如果正在处理相同的页码，或者页码没有变化，则忽略
-      if (isHandling || (pageNum === lastHandledPage && lastHandledPage !== 1)) {
-        return;
-      }
-
-      lastHandledPage = pageNum;
-      currentPageRef.current = pageNum;
-      isHandling = true;
-
-      // 将 Turn.js 页码转换为文字索引（页码-1，因为第1页是封面）
-      const textIndex = pageNum - 1;
-
-      const texts = pageTextsRef.current.length > 0 ? pageTextsRef.current : [];
-
-      // 清除之前的动画定时器
-      animationTimersRef.current.forEach(timer => clearTimeout(timer));
-      animationTimersRef.current = [];
-
-      // 延迟执行动画，确保 Turn.js 完成 DOM 操作
-      // 使用 ref 调用，确保总是调用最新版本的函数
-      setTimeout(() => {
-        if (animateTextRef.current) {
-          animateTextRef.current(pageNum); // 传递 Turn.js 页码
-        } else {
-          console.error(`[PAGE CHANGE] ✗ animateTextRef.current is null!`);
+        // 封面页（第1页）不显示文字
+        if (pageNum === 1) {
+          lastHandledPage = pageNum;
+          return;
         }
+
+        // 如果是初始加载且是第1页，只记录页码，不触发动画
+        if (isInitialLoad && pageNum === 1) {
+          lastHandledPage = pageNum;
+          return;
+        }
+
+        // 第一次真正的翻页后，标记初始加载完成
+        if (isInitialLoad && pageNum !== 1) {
+          isInitialLoad = false;
+        }
+
+        // 防抖：如果正在处理相同的页码，或者页码没有变化，则忽略
+        if (isHandling || (pageNum === lastHandledPage && lastHandledPage !== 1)) {
+          return;
+        }
+
+        lastHandledPage = pageNum;
+        currentPageRef.current = pageNum;
+        isHandling = true;
+
+        // 清除之前的动画定时器
+        animationTimersRef.current.forEach(timer => clearTimeout(timer));
+        animationTimersRef.current = [];
+
+        // 在double显示模式下，确保在右侧页面显示文字动画（奇数页，从3开始）
+        if (pageNum > 1 && pageNum % 2 !== 0) {
+          // 延迟执行动画，确保 Turn.js 完成 DOM 操作
+          // 使用 ref 调用，确保总是调用最新版本的函数
+          setTimeout(() => {
+            if (animateTextRef.current) {
+              animateTextRef.current(pageNum); // 传递 Turn.js 页码
+            } else {
+              console.error(`[PAGE CHANGE] ✗ animateTextRef.current is null!`);
+            }
+            isHandling = false;
+          }, 400);
+        } else {
+          // 非右侧页面，直接重置状态
+          isHandling = false;
+        }
+      } catch (e) {
+        console.warn("[PAGE CHANGE] Error in handlePageChange:", e);
         isHandling = false;
-      }, 400);
+      }
+    };
+    
+    // 处理文字编辑
+    const handleTextChange = (e, pageNum) => {
+      try {
+        // 只处理右侧页面（奇数页）的文字编辑
+        if (pageNum % 2 === 0) {
+          return;
+        }
+        
+        const text = e.target.textContent;
+        // 计算对应的文字索引
+        const textIndex = Math.floor((pageNum - 3) / 2) + 1;
+        
+        // 更新文字内容
+        console.log(`页面 ${pageNum} 的文字已更新:`, text);
+        
+        // 安全地更新ref中的内容
+        if (pageTextsRef.current && textIndex >= 0 && textIndex < pageTextsRef.current.length) {
+          pageTextsRef.current[textIndex] = text;
+        }
+      } catch (e) {
+        console.warn("[TEXT CHANGE] Error in handleTextChange:", e);
+      }
     };
 
     // 初始化 Turn.js
     $(el).turn({
       width: w,
       height: h,
-      display: "single",
+      display: "double",
       autoCenter: true,
       elevation: 50,
       acceleration: true,
@@ -440,12 +488,22 @@ export default function Diary() {
           }, 0);
         },
         turned: (event, page, view) => {
-          // 备用方案：使用 turned 事件
-          // handlePageChange(event, page, view);
+          // 确保文字动画在页面完全转向后也能触发
+          handlePageChange(event, page, view);
         }
       }
     });
 
+    // 显式设置初始页码为1，确保封面页正确显示
+    setTimeout(() => {
+      try {
+        $(el).turn("page", 1);
+        console.log("[INIT] 已设置初始页码为1（封面页）");
+      } catch (e) {
+        console.warn("[INIT] 设置初始页码失败:", e);
+      }
+    }, 100);
+    
     // // 同时使用 jQuery 的 on 方法绑定事件（多重保障）
     // $(el).on("end", handlePageChange);
     // $(el).on("turned", handlePageChange);
@@ -458,7 +516,7 @@ export default function Diary() {
     //   //     console.warn("Failed to play turn sound:", err);
     //   //   });
     //   // }
-      
+    //   
     //   try {
     //     const currentPage = $(el).turn("page");
     //     const pageEl = el.querySelector(`[data-page="${currentPage}"]`);
@@ -470,7 +528,7 @@ export default function Diary() {
     //       }
     //     }
     //   } catch (e) {
-    //     // 忽略错误
+    //     console.warn("[TURNING EVENT] Error clearing text:", e);
     //   }
     // });
 
@@ -567,21 +625,7 @@ export default function Diary() {
 
   const handleStart = () => {
     setStarted(true);
-    // 等待 Turn.js 初始化后，自动翻到第一页内容（第2页）
-    setTimeout(() => {
-      if (flipRef.current && $.fn && $.fn.turn) {
-        try {
-          $(flipRef.current).turn("page", 2);
-        } catch (e) {
-          setTimeout(() => {
-            try {
-              $(flipRef.current).turn("page", 2);
-            } catch (e2) {
-            }
-          }, 500);
-        }
-      }
-    }, 800);
+    // 移除自动翻到第2页的代码，保持在封面页（第1页）
   };
   
   // 翻页按钮（如果需要在 UI 中使用）
@@ -605,16 +649,14 @@ export default function Diary() {
           onClick={handleStart} 
           role="button" 
           aria-label="打开日记"
-          style={{ width: `${coverSize.w}px`, height: `${coverSize.h}px` }}
+          style={{ 
+            width: `${coverSize.w}px`, 
+            height: `${coverSize.h}px`,
+            backgroundImage: `url('/img/diary/diaryTitlePage.png')`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center'
+          }}
         >
-          <div className="diary-cover-content">
-            <div className="diary-cover-decoration diary-cover-decoration--top"></div>
-            <div className="diary-cover-main">
-              <div className="diary-cover-title">星空日记</div>
-              <div className="diary-cover-ornament">✦</div>
-            </div>
-            <div className="diary-cover-decoration diary-cover-decoration--bottom"></div>
-          </div>
           <div className="diary-cover-spine"></div>
         </div>
       </div>
@@ -624,10 +666,16 @@ export default function Diary() {
   return (
     <div className="diary-root" ref={containerRef}>
       <div id="flipbook" className="diary-flipbook" ref={flipRef}>
-        {/* 封面页（第1页） */}
+        {/* 封面页（第1页）- 作为右页面，左侧空白 */}
         <div 
           className="diary-page diary-page--cover" 
           data-page={1}
+          style={{ 
+            backgroundImage: `url('/img/diary/diaryTitlePage.png')`, 
+            backgroundSize: 'cover', 
+            backgroundPosition: 'center',
+            cursor: 'pointer' 
+          }}
           onClick={(e) => {
             // 防止重复翻页
             if (isTurningRef.current) {
@@ -656,33 +704,57 @@ export default function Diary() {
               isTurningRef.current = false;
             }
           }}
-          style={{ cursor: 'pointer' }}
         >
-          <div className="diary-book-cover diary-book-cover--page">
-            <div className="diary-cover-content">
-              <div className="diary-cover-decoration diary-cover-decoration--top"></div>
-              <div className="diary-cover-main">
-                <div className="diary-cover-title">星空日记</div>
-                <div className="diary-cover-ornament">✦</div>
-              </div>
-              <div className="diary-cover-decoration diary-cover-decoration--bottom"></div>
-            </div>
-            <div className="diary-cover-spine"></div>
-          </div>
+          {/* 移除嵌套的封面结构，直接使用背景图片显示 */}
         </div>
         
-        {/* 内容页 */}
-        {pages.map((img, idx) => {
-          const pageNum = idx + 2; // 从第2页开始（封面是第1页）
+        {/* 创建6个左右页对，对应6个状态 */}
+        {Array.from({ length: 6 }).map((_, idx) => {
+          // 计算页码 - Turn.js会自动处理双面，这里确保页码连续
+          const leftPageNum = idx * 2 + 2; // 左侧页面从2开始，依次为2,4,6...
+          const rightPageNum = leftPageNum + 1; // 右侧页面为3,5,7...
+          
+          // 获取左右页面的图片资源
+          const leftPageImg = textBackgrounds[idx]; // 左侧使用diaryText.jpg
+          const rightPageImg = pages[idx]; // 右侧使用diaryPage.jpg
+          
+          // 获取对应的文字内容
           const text = pageTexts[idx + 1] || ""; // 文字索引从1开始（对应第一页内容）
+          
           return (
-            <div key={idx} className="diary-page" data-page={pageNum} style={{ backgroundImage: `url('${img}')` }}>
-              {text && (
+            <React.Fragment key={idx}>
+              {/* 左侧页面 - diaryText.jpg */}
+              <div 
+                className="diary-page diary-page--left" 
+                data-page={leftPageNum} 
+                style={{ backgroundImage: `url('${leftPageImg}')` }}
+              />
+              
+              {/* 右侧页面 - diaryPage.jpg，包含可编辑文字显示区域 */}
+              <div 
+                className="diary-page diary-page--right" 
+                data-page={rightPageNum} 
+                style={{ backgroundImage: `url('${rightPageImg}')` }}
+              >
                 <div className="diary-text-container">
-                  <div className="diary-text-display"></div>
+                  <div 
+                    className="diary-text-display"
+                    contentEditable
+                    suppressContentEditableWarning={true}
+                    onInput={(e) => handleTextChange(e, rightPageNum)}
+                    style={{
+                      outline: 'none',
+                      cursor: 'text',
+                      color: '#333',
+                      fontFamily: 'Arial, sans-serif',
+                      lineHeight: '1.5',
+                      whiteSpace: 'pre-wrap',
+                      wordWrap: 'break-word'
+                    }}
+                  ></div>
                 </div>
-              )}
-            </div>
+              </div>
+            </React.Fragment>
           );
         })}
       </div>
