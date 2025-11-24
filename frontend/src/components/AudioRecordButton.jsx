@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useVoiceStream } from "../hooks/useVoiceStream";
+// Qwen Omni Realtime integration replacing legacy useVoiceStream
+import { useQwenRealtime } from "../hooks/useQwenRealtime";
 import "../styles.css";
 
 /**
@@ -35,7 +36,7 @@ export default function AudioRecordButton({
     startRecording,
     stopRecording,
     interrupt,
-  } = useVoiceStream();
+  } = useQwenRealtime();
 
   // 建立/释放 WebSocket 语音流连接
   useEffect(() => {
