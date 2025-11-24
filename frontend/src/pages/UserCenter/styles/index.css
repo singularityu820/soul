@@ -256,20 +256,46 @@
   box-shadow: 0 6px 20px rgba(33, 150, 243, 0.3);
 }
 
-/* 进度图片样式 */
+/* 进度图片容器 */
 .jindu-container {
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 1000;
-  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  z-index: 10;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+
+.jindu-container:hover {
+  transform: scale(1.02);
 }
 
 .jindu-img {
-  width: 840px;
+  width: 600px;
   height: auto;
   opacity: 0.8;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+  transition: transform 0.3s ease;
+}
+
+.jindu-img:hover {
+  transform: scale(1.02);
+}
+
+.jindu-title {
+  width: 200px;
+  height: auto;
+  opacity: 0.95;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  transition: transform 0.3s ease;
+}
+
+.jindu-title:hover {
+  transform: scale(1.02);
 }
 
 /* 游戏进度覆盖层样式 */
@@ -391,21 +417,26 @@
   top: 20px;
   left: 20px;
   color: #333;
-  font-size: 28px;
+  font-size: 24px;
   font-weight: bold;
   z-index: 1003;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
   background: rgba(255, 255, 255, 0.7);
-  padding: 5px 10px;
+  padding: 4px 8px;
   border-radius: 5px;
 }
 
 .riji-img {
-  width: 560px;
+  width: 470px;
   height: auto;
   opacity: 0.9;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
   border-radius: 8px;
+  transition: transform 0.3s ease;
+}
+
+.riji-img:hover {
+  transform: scale(1.02);
 }
 
 /* 日记总数徽章样式 */
@@ -458,13 +489,13 @@
   word-break: break-word;
 }
 
-/* 日记毛玻璃框样式 */
+/* 日记毛玻璃框 */
 .riji-glass-frame {
   position: fixed;
-  top: 500px;
+  top: 440px;
   left: 250px;
-  width: 560px;
-  height: calc(100vh - 520px);
+  width: 470px;
+  height: calc(100vh - 440px - 20px);
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(15px);
   border: 1px solid rgba(255, 255, 255, 0.2);
@@ -475,6 +506,12 @@
   box-sizing: border-box;
   pointer-events: auto;
   overflow-y: auto;
+  transition: transform 0.2s ease;
+  cursor: pointer;
+}
+
+.riji-glass-frame:hover {
+  transform: scale(1.02);
 }
 
 /* 聊天历史记录标题样式 */
@@ -518,7 +555,7 @@
 
 .history-text {
   color: rgba(255, 255, 255, 0.9);
-  font-size: 25.6px;
+  font-size: 20px;
   line-height: 1.5;
   margin: 0;
   /* 最多显示两行，超出省略 */
@@ -569,21 +606,21 @@
 }
 
 .logout-button {
-  padding: 24px 48px;
+  padding: 16px 32px;
   background: rgba(244, 67, 54, 0.3);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(244, 67, 54, 0.5);
   color: white;
-  border-radius: 16px;
-  font-size: 32px;
+  border-radius: 12px;
+  font-size: 20px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 8px 30px rgba(244, 67, 54, 0.2);
+  box-shadow: 0 6px 20px rgba(244, 67, 54, 0.2);
 }
 
 .logout-button:hover {
   background: rgba(244, 67, 54, 0.5);
-  transform: translateY(-4px);
-  box-shadow: 0 12px 40px rgba(244, 67, 54, 0.3);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(244, 67, 54, 0.3);
 }

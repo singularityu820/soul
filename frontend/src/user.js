@@ -112,6 +112,8 @@ const UserPageUtils = {
             
             // 加载用户头像
             await this.loadUserAvatar(username);
+            // 加载并展示游戏速率贴图
+            await this.updateRateImage(username);
             
             return true;
         }
@@ -129,6 +131,11 @@ const UserPageUtils = {
         
         // 添加头像点击切换功能
         this.addAvatarClickHandler();
+        
+        const username = Cookies.get('username');
+        if (username) {
+            setInterval(() => this.updateRateImage(username), 30000);
+        }
     },
 
     /**
@@ -218,6 +225,29 @@ const UserPageUtils = {
         });
 
         console.log('✅ 弹窗事件绑定完成');
+    },
+
+    async updateRateImage(username) {
+        try {
+            const rateObj = await getInfoAtServer(`${username}-gamerate`);
+            const rRaw = rateObj?.message?.rate;
+            const rNum = typeof rRaw === 'number' ? rRaw : parseFloat(rRaw);
+            
+            // 只有当获取到有效rate值时才更新，否则保持当前状态
+            if (!isNaN(rNum)) {
+                const rate = Math.max(0, Math.min(1, rNum));
+                const index = Math.max(0, Math.min(5, Math.round(rate * 5)));
+                const imgEl = document.querySelector('.jindu-container .jindu-img');
+                if (imgEl) {
+                    imgEl.src = `./img/${index}.png`;
+                }
+                console.log('更新游戏速率贴图:', { rate, index });
+            } else {
+                console.warn('获取到无效的rate值，保持当前状态:', rRaw);
+            }
+        } catch (error) {
+            console.warn('获取游戏速率失败，保持当前状态:', error);
+        }
     },
 
     /**

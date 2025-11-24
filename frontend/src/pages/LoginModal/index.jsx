@@ -56,7 +56,11 @@ export default function LoginModal({ onClose, onLoginSuccess }) {
   return (
     <div className="login-modal">
       <div className="login-container">
-        <h2>{isLogin ? "登录" : "注册"}</h2>
+        <div className="login-header">
+          <h2>LetPrLogin</h2>
+          <p>欢迎回来 - 登录或创建新账户</p>
+        </div>
+        <h3 className="form-title">{isLogin ? "登录" : "注册"}</h3>
         <form onSubmit={handleSubmit}>
           <div className="form-group">
             <label htmlFor="username">用户名</label>
@@ -95,11 +99,15 @@ export default function LoginModal({ onClose, onLoginSuccess }) {
             <button type="submit" disabled={isLoading}>
               {isLoading ? "处理中..." : (isLogin ? "登录" : "注册")}
             </button>
-            <button type="button" onClick={toggleMode} className="toggle-btn">
-              {isLogin ? "没有账号？注册" : "已有账号？登录"}
-            </button>
           </div>
         </form>
+        <p className="toggle-text">
+            {isLogin ? "还没有账户? " : "已有账号？ "}
+            <span onClick={toggleMode}>
+                {isLogin ? "立即注册" : "立即登录"}
+            </span>
+        </p>
+
       </div>
     </div>
   );

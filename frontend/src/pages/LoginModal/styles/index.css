@@ -15,21 +15,39 @@
 }
 
 .login-container {
-  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  background: rgba(30, 30, 30, 0.8);
   border-radius: 15px;
   padding: 30px;
   width: 90%;
-  max-width: 400px;
+  max-width: 390px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  position: absolute;
+  top: 110px;
+  right: 190px;
 }
 
 .login-container h2 {
   color: #ffffff;
   text-align: center;
-  margin-bottom: 25px;
-  font-size: 24px;
+  margin-bottom: 10px;
+  font-size: 35px;
   font-weight: 600;
+}
+
+.login-header p {
+  color: #b0b0b0;
+  text-align: center;
+  margin-bottom: 25px;
+  font-size: 20px;
+}
+
+.form-title {
+  color: #ffffff;
+  text-align: left;
+  margin-bottom: 20px;
+  font-size: 20px;
+  font-weight: 500;
 }
 
 .form-group {
@@ -39,13 +57,13 @@
 .form-group label {
   display: block;
   color: #b0b0b0;
-  margin-bottom: 8px;
-  font-size: 14px;
+  margin-bottom: 3px;
+  font-size: 16px;
 }
 
 .form-group input {
   width: 100%;
-  padding: 12px 15px;
+  padding: 15px 18px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
@@ -56,7 +74,7 @@
 
 .form-group input:focus {
   outline: none;
-  border-color: #4a6fdc;
+  border-color: #53555c;
   background: rgba(255, 255, 255, 0.15);
   box-shadow: 0 0 0 2px rgba(74, 111, 220, 0.3);
 }
@@ -77,10 +95,11 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin-bottom: 20px;
 }
 
 .form-actions button {
-  padding: 12px;
+  padding: 18px;
   border: none;
   border-radius: 8px;
   font-size: 16px;
@@ -90,29 +109,56 @@
 }
 
 .form-actions button[type="submit"] {
-  background: linear-gradient(135deg, #4a6fdc, #3a5bc9);
+  background: #414249;
   color: white;
 }
 
 .form-actions button[type="submit"]:hover {
-  background: linear-gradient(135deg, #3a5bc9, #2a4ab9);
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(74, 111, 220, 0.4);
+  background: #3a5bc9;
 }
 
 .form-actions button[type="submit"]:disabled {
   background: #555;
   cursor: not-allowed;
-  transform: none;
-  box-shadow: none;
 }
 
-.toggle-btn {
-  background: transparent;
+.toggle-text {
+  color: #b0b0b0;
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.toggle-text span {
   color: #4a6fdc;
-  border: 1px solid #4a6fdc;
+  cursor: pointer;
 }
 
-.toggle-btn:hover {
-  background: rgba(74, 111, 220, 0.1);
+.extra-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.extra-actions button {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #555;
+  border-radius: 8px;
+  background: #333;
+  color: #b0b0b0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.extra-actions button:hover {
+  background: #444;
+  border-color: #666;
+}
+
+.logout-btn {
+  background: #c93a3a !important;
+  border-color: #c93a3a !important;
+  color: white !important;
 }

@@ -19,6 +19,7 @@ export default function UserCenter() {
     nextLevelExp: 100,
     achievements: ["新手玩家", "首次登录"]
   });
+  const [gameRate, setGameRate] = useState(0);
   
   // 引用
   const tempMessageTimeoutRef = useRef(null);
@@ -49,22 +50,24 @@ export default function UserCenter() {
     
     initializeData();
     
-    // 设置定时器，每30秒同步一次游戏进度
+    // 设置定时器，每30秒从后端获取速率并影响前端展示
     const syncInterval = setInterval(async () => {
       const username = Cookies.get("username");
       if (username) {
         try {
-          const serverProgress = await getInfoAtServer(`${username}-gameProgress`);
-          if (serverProgress && serverProgress.level !== undefined) {
-            setGameProgress(serverProgress);
-            localStorage.setItem(`gameProgress_${username}`, JSON.stringify(serverProgress));
-            console.log("定时同步游戏进度成功");
+          const rateObj = await getInfoAtServer(`${username}-gamerate`);
+          const rRaw = rateObj?.message?.rate;
+          const rNum = typeof rRaw === 'number' ? rRaw : parseFloat(rRaw);
+          if (!isNaN(rNum)) {
+            const clamped = Math.max(0, Math.min(1, rNum));
+            setGameRate(clamped);
+            console.log("定时获取并更新游戏速率成功:", clamped);
           }
         } catch (error) {
-          console.log("定时同步游戏进度失败:", error);
+          console.log("定时获取游戏速率失败:", error);
         }
       }
-    }, 30000); // 每30秒同步一次
+    }, 30000);
     
     return () => clearInterval(syncInterval);
   }, []);
@@ -74,53 +77,73 @@ export default function UserCenter() {
     try {
       const username = Cookies.get("username");
       if (username) {
-        // 尝试从服务器获取游戏进度
+        let rateLoaded = false;
+        
+        // 优先尝试从服务器获取游戏进度
         try {
-          const serverProgress = await getInfoAtServer(`${username}-gameProgress`);
-          if (serverProgress && serverProgress.level !== undefined) {
-            // 服务器有数据，使用服务器数据
-            setGameProgress(serverProgress);
-            // 同时更新本地存储作为备份
-            localStorage.setItem(`gameProgress_${username}`, JSON.stringify(serverProgress));
-            console.log("从服务器加载游戏进度成功:", serverProgress);
-            return;
+          const rateObj = await getInfoAtServer(`${username}-gamerate`);
+          const rRaw = rateObj?.message?.rate;
+          const rNum = typeof rRaw === 'number' ? rRaw : parseFloat(rRaw);
+          if (!isNaN(rNum)) {
+            const clamped = Math.max(0, Math.min(1, rNum));
+            setGameRate(clamped);
+            rateLoaded = true;
+            console.log("从服务器加载游戏速率成功:", clamped);
+            
+            // 根据rate值反推游戏进度
+            const experience = Math.round(clamped * 100); // 假设nextLevelExp为100
+            const gameProgress = {
+              level: 1,
+              experience: experience,
+              nextLevelExp: 100,
+              achievements: ["新手玩家", "首次登录"]
+            };
+            setGameProgress(gameProgress);
+            localStorage.setItem(`gameProgress_${username}`, JSON.stringify(gameProgress));
           }
         } catch (serverError) {
           console.log("从服务器获取游戏进度失败，尝试本地存储:", serverError);
         }
         
-        // 服务器没有数据或获取失败，尝试从本地存储获取
-        const savedProgress = localStorage.getItem(`gameProgress_${username}`);
-        
-        if (savedProgress) {
-          const localProgress = JSON.parse(savedProgress);
-          setGameProgress(localProgress);
-          console.log("从本地存储加载游戏进度:", localProgress);
+        // 如果服务器没有加载到rate数据，再尝试从本地存储获取
+        if (!rateLoaded) {
+          const savedProgress = localStorage.getItem(`gameProgress_${username}`);
           
-          // 尝试将本地数据同步到服务器
-          try {
-            await writeInfoAtServer(`${username}-gameProgress`, localProgress);
-            console.log("本地游戏进度已同步到服务器");
-          } catch (syncError) {
-            console.log("同步本地游戏进度到服务器失败:", syncError);
-          }
-        } else {
-          // 初始化默认进度
-          const defaultProgress = {
-            level: 1,
-            experience: 0,
-            nextLevelExp: 100,
-            achievements: ["新手玩家", "首次登录"]
-          };
-          localStorage.setItem(`gameProgress_${username}`, JSON.stringify(defaultProgress));
-          setGameProgress(defaultProgress);
-          
-          // 尝试将默认进度同步到服务器
-          try {
-            await writeInfoAtServer(`${username}-gameProgress`, defaultProgress);
-            console.log("默认游戏进度已同步到服务器");
-          } catch (syncError) {
-            console.log("同步默认游戏进度到服务器失败:", syncError);
+          if (savedProgress) {
+            const localProgress = JSON.parse(savedProgress);
+            setGameProgress(localProgress);
+            console.log("从本地存储加载游戏进度:", localProgress);
+            
+            // 尝试将本地数据同步到服务器
+            try {
+              const rate = localProgress.nextLevelExp > 0 ? localProgress.experience / localProgress.nextLevelExp : 0;
+              await writeInfoAtServer(`${username}-gamerate`, { message: { rate } });
+              setGameRate(Math.max(0, Math.min(1, rate)));
+              console.log("本地游戏进度已同步到服务器");
+            } catch (syncError) {
+              console.log("同步本地游戏进度到服务器失败:", syncError);
+            }
+          } else {
+            // 只有在服务器和本地都没有数据时，才初始化默认进度
+            console.log("服务器和本地都没有游戏进度数据，初始化默认进度");
+            const defaultProgress = {
+              level: 1,
+              experience: 0,
+              nextLevelExp: 100,
+              achievements: ["新手玩家", "首次登录"]
+            };
+            localStorage.setItem(`gameProgress_${username}`, JSON.stringify(defaultProgress));
+            setGameProgress(defaultProgress);
+            
+            // 尝试将默认进度同步到服务器
+            try {
+              const rate = defaultProgress.nextLevelExp > 0 ? defaultProgress.experience / defaultProgress.nextLevelExp : 0;
+              await writeInfoAtServer(`${username}-gamerate`, { message: { rate } });
+              setGameRate(Math.max(0, Math.min(1, rate)));
+              console.log("默认游戏进度已同步到服务器");
+            } catch (syncError) {
+              console.log("同步默认游戏进度到服务器失败:", syncError);
+            }
           }
         }
       }
@@ -143,7 +166,9 @@ export default function UserCenter() {
         
         // 尝试将进度更新到服务器
         try {
-          await writeInfoAtServer(`${username}-gameProgress`, newProgress);
+          const rate = newProgress.nextLevelExp > 0 ? newProgress.experience / newProgress.nextLevelExp : 0;
+          await writeInfoAtServer(`${username}-gamerate`, { message: { rate } });
+          setGameRate(Math.max(0, Math.min(1, rate)));
           console.log("游戏进度已更新到服务器:", newProgress);
         } catch (serverError) {
           console.log("更新游戏进度到服务器失败，仅本地更新:", serverError);
@@ -365,6 +390,16 @@ export default function UserCenter() {
     showTempMessage("数据已刷新");
   };
 
+  // 处理进度条点击事件
+  const handleProgressClick = () => {
+    window.location.hash = "#/portal-planb";
+  };
+
+  // 处理通话记录点击事件
+  const handleChatHistoryClick = () => {
+    window.location.hash = "#/chatnew";
+  };
+
   // 获取头像URL
   const getAvatarUrl = (avatarName) => {
     return `./img/${avatarName}.jpg`;
@@ -459,7 +494,7 @@ export default function UserCenter() {
       </div>
       
       {/* 日记毛玻璃框 - 显示最近聊天记录 */}
-      <div className="riji-glass-frame">
+      <div className="riji-glass-frame" onClick={handleChatHistoryClick} style={{ cursor: 'pointer' }}>
         <div className="chat-history-title">与小王子的通话记录</div>
         {recentMessages.length > 0 ? (
           recentMessages.map((message) => (
@@ -481,39 +516,14 @@ export default function UserCenter() {
         )}
       </div>
       
-      {/* 进度图片容器 */}
-      <div className="jindu-container">
-        <img src="./img/jindu.png" alt="进度图片" className="jindu-img" />
-        
-        {/* 游戏进度信息覆盖层 */}
-        <div className="game-progress-overlay">
-          <div className="level-info">
-            <span className="level-label">等级</span>
-            <span className="level-value">{gameProgress.level}</span>
-          </div>
-          
-          <div className="exp-bar-container">
-            <div className="exp-bar-label">经验值</div>
-            <div className="exp-bar">
-              <div 
-                className="exp-bar-fill" 
-                style={{ width: `${(gameProgress.experience / gameProgress.nextLevelExp) * 100}%` }}
-              ></div>
-            </div>
-            <div className="exp-text">
-              {gameProgress.experience}/{gameProgress.nextLevelExp}
-            </div>
-          </div>
-          
-          <div className="achievements-container">
-            <div className="achievements-label">成就</div>
-            <div className="achievements-list">
-              {gameProgress.achievements.map((achievement, index) => (
-                <div key={index} className="achievement-badge">{achievement}</div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* 进度图片容器（根据后端 rate 切换贴图）*/}
+      <div className="jindu-container" onClick={handleProgressClick} style={{ cursor: 'pointer' }}>
+        <img src="./img/title.png" alt="标题" className="jindu-title" />
+        {(() => {
+          const index = Math.max(0, Math.min(5, Math.round(gameRate * 5)));
+          const src = `./img/${index}.png`;
+          return <img src={src} alt="进度图片" className="jindu-img" />;
+        })()}
       </div>
     </div>
   );

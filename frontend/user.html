@@ -237,9 +237,13 @@
       .jindu-container {
         position: fixed;
         bottom: 20px;
-        right: 20px;
+        right: 85px;
         z-index: 1000;
         pointer-events: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
       }
       
       .jindu-img {
@@ -247,6 +251,12 @@
         height: auto;
         opacity: 0.8;
         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+      }
+      .jindu-title {
+        width: 400px;
+        height: auto;
+        opacity: 0.95;
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
       }
       
       /* 日记图片样式 */
@@ -490,6 +500,7 @@
     
     <!-- 进度图片容器 -->
     <div class="jindu-container">
+      <img src="./img/title.png" alt="标题" class="jindu-title">
       <img src="./img/jindu.png" alt="进度图片" class="jindu-img">
     </div>
   </body>
