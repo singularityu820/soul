@@ -10,6 +10,8 @@ from ..dependencies import get_chat_service, get_chat_storage
 from ..schemas import ChatMessage, ChatMessageIn, ChatThreadCreateIn, ChatThreadOut
 from ..services.chat.service import ChatService
 from ..services.chat.storage import ChatStorage
+from ..services.chat.realtime_storage import RealtimeTranscriptStorage
+from datetime import datetime
 
 router = APIRouter()
 
@@ -73,9 +75,35 @@ async def get_recent_messages_by_username(
     if not username:
         raise HTTPException(status_code=401, detail="Username not found in cookie")
     
-    storage = get_chat_storage()
-    messages = storage.get_recent_messages_by_username(username, limit)
-    return messages
+    # 使用 RealtimeTranscriptStorage 替代历史 ChatStorage，返回最近的实时转录
+    rt_storage = RealtimeTranscriptStorage()
+    rt_items = rt_storage.get_transcripts_by_username(username, limit)
+
+    out = []
+    for item in rt_items:
+        try:
+            created_at = datetime.fromisoformat(item["created_at"]) if isinstance(item["created_at"], str) else item["created_at"]
+        except Exception:
+            created_at = datetime.utcnow()
+
+        role = item.get("role") or "user"
+        # schema uses 'agent' instead of 'assistant'
+        if role == "assistant":
+            role = "agent"
+
+        out.append(
+            ChatMessage(
+                message_id=item.get("id") or uuid.uuid4().hex,
+                thread_id=item.get("session_id") or "",
+                role=role,
+                text=item.get("text") or "",
+                created_at=created_at,
+                language="zh",
+                username=username,
+            )
+        )
+
+    return out
 
 
 @router.post("/chat/threads/{thread_id}/messages", response_model=ChatMessage, status_code=201)
@@ -96,3 +124,57 @@ async def post_message(
         storage.save_message(message, username)
     
     return message
+
+
+@router.get("/chat/user/{username}/recent")
+async def get_recent_messages_for_user(
+    username: str,
+    limit: int = 3,
+) -> dict:
+    """返回给定用户名的最近聊天消息与实时转录（合并、按时间降序）。
+
+    返回格式：{"messages": [ChatMessageLike, ...]}
+    """
+    # 新架构：仅从 RealtimeTranscriptStorage 获取最近聊天记录（包含 user/assistant）
+    rt_storage = RealtimeTranscriptStorage()
+    rt_items = rt_storage.get_transcripts_by_username(username, limit)
+
+    # 将实时转录转换为与 ChatMessage 兼容的 dict
+    rt_msgs = []
+    for item in rt_items:
+        try:
+            created_at = datetime.fromisoformat(item["created_at"]) if isinstance(item["created_at"], str) else item["created_at"]
+        except Exception:
+            created_at = datetime.utcnow()
+        role = item.get("role") or "user"
+        if role == "assistant":
+            role = "agent"
+        rt_msgs.append({
+            "message_id": item["id"],
+            "thread_id": item["session_id"],
+            "role": role,
+            "text": item["text"],
+            "created_at": created_at,
+            "language": "zh",
+            "username": username,
+        })
+
+    # 合并并按 created_at 降序（最近的在前），限制总条数为 limit
+    # Only realtime messages
+    combined = rt_msgs
+    # sort by created_at desc
+    def _created_at_key(x):
+        v = x.get("created_at")
+        if isinstance(v, str):
+            try:
+                return datetime.fromisoformat(v)
+            except Exception:
+                return datetime.utcnow()
+        if isinstance(v, datetime):
+            return v
+        return datetime.utcnow()
+
+    combined.sort(key=_created_at_key, reverse=True)
+    combined = combined[:limit]
+
+    return {"messages": combined}

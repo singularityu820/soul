@@ -84,6 +84,11 @@ When you deploy the frontend behind a reverse proxy (non-`localhost:8000`), set 
 - **Avatar rendering**: The front-end `AvatarCanvas` can be swapped with a richer WebGL canvas or a game engine stream that listens to the same WebSocket.
 - **WebSocket voice streaming**: Use the voice toggle in the chat UI to open `/ws/voice-stream`. Microphone audio is chunked to 16kHz PCM, streamed via WebSocket, and the backend responds with transcripts, streaming LLM chunks, and TTS segment URLs. No STUN/TURN setup is required.
 - **ASR (Speech Recognition)**: Set `ASR_PROVIDER=openai|azure|dashscope|modelscope` and corresponding API keys (`OPENAI_API_KEY` for Whisper, `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` for Azure, `DASHSCOPE_API_KEY` for Qwen ASR). User voice is automatically transcribed and fed into the LLM conversation. Falls back to sandbox mode if no ASR provider is configured.
+
+- **语音 -> EEG 显示（回退）**: 当部署环境无法使用真实 EEG 或摄像头时，可开启语音情绪回退以将语音情绪结果映射为一个 `eeg` 通道，从而在前端以脑波/EEG 的形式展示情绪。
+  - 启用方式：设置环境变量 `SPEECH_EMOTION_FALLBACK=1`。
+  - 可选：若希望使用通义千问（DashScope/Qwen）实现更准确的情绪检测，请提供 `DASHSCOPE_API_KEY` 并安装 `dashscope` SDK；系统会在音频 flush（句末静音）时把音频发送给 DashScope，并把检测到的情绪标签注入到情绪融合流程中。
+  - 配置与验证说明见：`docs/SPEECH_EEG_FALLBACK.md`。
 - Set `TTS_PROVIDER` (azure|edge|polly|coqui|ollama|sovits) or rely on auto detection (`AZURE_TTS_KEY`, `EDGE_TTS_KEY`, AWS credentials, or responsive Ollama endpoint).
 
 ## Next Steps

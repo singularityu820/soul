@@ -147,17 +147,10 @@ export default function ChatApp() {
 
   const handleSendMessage = useCallback(
     async (text) => {
+      // 已迁移到全模态实时通话：不再将用户实时消息写入旧的 chat threads API。
+      // 此处保留为 no-op，以避免向后端发送 POST 导致 404 日志。
       if (!activeThreadId) return;
-      try {
-        await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-          credentials: 'include', // 包含cookies
-        });
-      } catch (error) {
-        console.error("Failed to send chat message", error);
-      }
+      console.debug('[ChatApp] sendMessage skipped (all-modal realtime mode):', text.slice(0, 80));
     },
     [activeThreadId]
   );

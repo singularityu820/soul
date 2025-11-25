@@ -1,12 +1,15 @@
 import Cookies from "js-cookie";
+import { resolveApiBaseUrl } from "./endpointResolver";
 
-// 服务器基础URL
-const serverUrl = "http://localhost:8000/api/diary";
+// 服务器基础URL（用于 diary 为独立路径）
+const API_BASE = resolveApiBaseUrl();
+// 日记 API 基础路径
+const DIARY_BASE = `${API_BASE}/api/diary`;
 
 // 获取最新日记文本
 export const getLatestDiaryText = async (username) => {
   try {
-    const response = await fetch(`${serverUrl}/user/${username}/latest`, {
+    const response = await fetch(`${DIARY_BASE}/user/${username}/latest`, {
       method: 'GET',
       credentials: 'include', // 包含cookies
       headers: {
@@ -23,7 +26,7 @@ export const getLatestDiaryText = async (username) => {
     
     // 获取日记总数
     try {
-      const countResponse = await fetch(`${serverUrl}/user/${username}/count`);
+      const countResponse = await fetch(`${DIARY_BASE}/user/${username}/count`);
       if (countResponse.ok) {
         const countData = await countResponse.json();
         data.total_count = countData.count || 0;
@@ -45,14 +48,23 @@ export const getLatestDiaryText = async (username) => {
 // 获取最近聊天记录
 export const getRecentMessages = async (username, limit = 3) => {
   try {
-    const response = await fetch(`http://localhost:8000/chat/user/${username}/recent?limit=${limit}`, {
+    const user = username || Cookies.get("username");
+    if (!user) {
+      console.warn("getRecentMessages: username not provided and no cookie found");
+      return [];
+    }
+
+    const url = `${API_BASE}/chat/user/${encodeURIComponent(user)}/recent?limit=${limit}`;
+    console.debug("getRecentMessages requesting:", url);
+
+    const response = await fetch(url, {
       method: 'GET',
       credentials: 'include', // 包含cookies
       headers: {
         'Content-Type': 'application/json'
       }
     });
-    
+
     if (!response.ok) {
       if (response.status === 401) {
         console.error("用户未登录或Cookie已过期");
@@ -60,13 +72,13 @@ export const getRecentMessages = async (username, limit = 3) => {
       }
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    console.log("获取到的聊天记录:", data);
+    console.debug("获取到的聊天记录:", data);
+    // 后端现在返回 { messages: [...] } 或直接数组（兼容）
     return data.messages || data || [];
   } catch (error) {
     console.error("获取聊天记录失败:", error);
-    // 如果获取失败，返回空数组
     return [];
   }
 };
@@ -81,7 +93,7 @@ export const getUserInfo = async () => {
     }
     
     // 由于后端没有专门的用户信息API，使用日记API获取用户信息
-    const response = await fetch(`${serverUrl}/user/${userId}/count`);
+    const response = await fetch(`${DIARY_BASE}/user/${userId}/count`);
     if (response.ok) {
       const data = await response.json();
       // 返回用户信息，包含日记数量

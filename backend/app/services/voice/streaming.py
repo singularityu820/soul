@@ -242,8 +242,16 @@ class VoiceStreamSession:
         # 调用ASR服务进行转录
         try:
             # Import here to avoid circular dependency
-            from ...dependencies import get_asr_service
+            from ...dependencies import get_asr_service, get_speech_tool
             asr_service = get_asr_service()
+            # Update speech-based emotion tool with the flushed audio so the
+            # EmotionPipeline can optionally use speech as an EEG fallback.
+            try:
+                speech_tool = get_speech_tool()
+                if speech_tool is not None:
+                    await speech_tool.update_from_audio(combined_audio)
+            except Exception:
+                logger.exception("Failed updating speech emotion tool from audio")
             
             transcript = await asr_service.transcribe(
                 combined_audio,

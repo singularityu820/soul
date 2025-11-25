@@ -218,19 +218,9 @@ export default function ChatAppCopy() {
 
   const handleSendMessage = useCallback(
     async (text) => {
+      // 全模态实时通话为主：不再写入旧的 chat threads API，避免 404
       if (!activeThreadId) return;
-      try {
-        // 获取当前登录用户的username
-        const username = Cookies.get('username');
-        await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, username }),
-          credentials: 'include', // 包含cookies
-        });
-      } catch (error) {
-        console.error("Failed to send chat message", error);
-      }
+      console.debug('[ChatAppCopy] sendMessage skipped (all-modal realtime mode):', text.slice(0,80));
     },
     [activeThreadId]
   );

@@ -1,0 +1,54 @@
+.voice-call-transcript {
+  min-width: 280px;
+  max-width: 520px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  backdrop-filter: blur(6px) saturate(120%);
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.voice-call-transcript .transcript-user {
+  color: #e6f7ff;
+}
+
+.voice-call-transcript .transcript-ai {
+  color: #fff8e1;
+}
+
+/* 更小屏幕下自适应宽度 */
+@media (max-width: 640px) {
+  .voice-call-transcript {
+    min-width: 200px;
+    max-width: 90vw;
+    padding: 8px 10px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+}
+
+/* 页面级定位样式（ChatNew 使用） */
+.voice-call-chatbox-page {
+  position: fixed;
+  left: 260px;
+  top: 150px;
+  z-index: 30;
+  pointer-events: auto; /* allow interactions if needed */
+}
+
+/* 更靠近顶部时，为小屏幕调整边距 */
+@media (max-width: 640px) {
+  .voice-call-chatbox-page {
+    left: 12px;
+    top: 12px;
+    right: auto;
+    bottom: auto;
+  }
+}

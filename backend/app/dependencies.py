@@ -29,6 +29,7 @@ from .services.emotion import (
     FaceEmotionTool,
     create_eeg_processor,
 )
+from .services.agent.speech import SpeechEmotionTool
 from .services.emotion.eeg_waveform import EEGWaveformService
 from .services.voice import VoiceStreamHub
 
@@ -73,11 +74,15 @@ agent = ConversationalAgent(
     tts_service=tts_service,
 )
 
+# Speech tool (used for ASR-based emotion/fallback)
+speech_tool = SpeechEmotionTool()
+
 # Pipeline
 pipeline = EmotionPipeline(
     eeg_stream=eeg_stream,
     eeg_classifier=eeg_classifier,
     face_tool=face_tool,
+    speech_tool=speech_tool,
     fusion=fusion_service,
     avatar=avatar,
     agent=agent,
@@ -163,3 +168,7 @@ def get_asr_service() -> ASRService:
 
 def get_face_tool() -> FaceEmotionTool:
     return face_tool
+
+
+def get_speech_tool() -> SpeechEmotionTool:
+    return speech_tool

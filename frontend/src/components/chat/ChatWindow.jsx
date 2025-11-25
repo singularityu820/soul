@@ -1,14 +1,10 @@
 import PropTypes from "prop-types";
 import { useCallback, useEffect, useRef, useState } from "react";
-import MessageList from "./MessageList.jsx";
 import MessageComposer from "./MessageComposer.jsx";
 import VideoDisplay from "../VideoDisplay.jsx";
 
 export default function ChatWindow({
   thread,
-  messages,
-  recentMessages,
-  loading,
   onSend,
   emotionData,
   onEmotionUpdate,
@@ -19,6 +15,31 @@ export default function ChatWindow({
   const [cameraError, setCameraError] = useState(null);
   const streamRef = useRef(null);
 
+  // 注册全局控制接口，允许页面外部停止/查询流状态
+  useEffect(() => {
+    // 停止摄像头流（可由外部调用）
+    window.__stopEmotionStream = () => {
+      try {
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach((track) => track.stop());
+          streamRef.current = null;
+        }
+        setEmotionDetectionStream(null);
+        setCameraError(null);
+        console.log('[ChatWindow] __stopEmotionStream called - stream stopped');
+      } catch (e) {
+        console.warn('[ChatWindow] __stopEmotionStream error', e);
+      }
+    };
+
+    // 只注册，不自动启动
+    return () => {
+      try {
+        if (window.__stopEmotionStream) delete window.__stopEmotionStream;
+      } catch (e) {}
+    };
+  }, []);
+
   useEffect(() => {
     setEmotionState(emotionData);
   }, [emotionData]);
@@ -26,6 +47,16 @@ export default function ChatWindow({
   useEffect(() => {
     if (!thread) {
       // 无会话时释放资源
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+      }
+      setEmotionDetectionStream(null);
+      return;
+    }
+
+    // 如果页面层面明确禁用了情绪检测（例如在 ChatNew 中隐藏了视频），则不要请求摄像头
+    if (window.__EMOTION_DETECTION_DISABLED) {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
@@ -188,8 +219,10 @@ export default function ChatWindow({
         )}
       </div>
 
-      <MessageList messages={messages} recentMessages={recentMessages} loading={loading} />
-      <MessageComposer onSend={onSend} disabled={!thread} />
+      {/* 已移除聊天记录渲染：消息由上层统一管理并显示，避免重复 */}
+      <div className="chat-window__composer">
+        <MessageComposer onSend={onSend} disabled={!thread} />
+      </div>
     </div>
   );
 }
@@ -200,9 +233,6 @@ ChatWindow.propTypes = {
     title: PropTypes.string,
     participants: PropTypes.arrayOf(PropTypes.string),
   }),
-  messages: PropTypes.array,
-  recentMessages: PropTypes.array,
-  loading: PropTypes.bool,
   onSend: PropTypes.func,
   emotionData: PropTypes.object,
   onEmotionUpdate: PropTypes.func,

@@ -1,10 +1,12 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./styles/index.css";
-import backgroundImg from "./styles/img/background.jpg";
+import backgroundImg from "../../../img/background_chat.jpg";
 import VoiceCallControls from "../../components/VoiceCallControls.jsx";
 import EEGWaveformDisplay from "../../components/EEGWaveformDisplay.jsx";
 import EEGDeviceControlPanel from "../../components/EEGDeviceControlPanel.jsx";
 import ChatApp from "./ChatAppCopy.jsx";
+import VoiceCallChatBox from "../../components/VoiceCallChatBox.jsx";
+import { subscribeVoiceCall, getVoiceCallData } from "../../utils/voiceCallStore";
 import { v4 as uuidv4 } from "uuid";
 import { resolveApiBaseUrl, resolveWebSocketUrl } from "../../utils/endpointResolver";
 import { safelyCloseWebSocket } from "../../utils/websocketHelpers";
@@ -38,6 +40,8 @@ export default function ChatNew() {
   const pipelineSocketRef = useRef(null);
   const pipelineReconnectTimerRef = useRef(null);
   const chatSocketRef = useRef(null);
+  const [voiceTranscript, setVoiceTranscript] = useState(null);
+  const [voiceResponse, setVoiceResponse] = useState(null);
   const messageIdsRef = useRef(new Set());
   
   // 入场动画
@@ -87,6 +91,40 @@ export default function ChatNew() {
     initializeThread();
   }, [initializeThread]);
 
+  // 如果视频区域被样式隐藏（例如临时 CSS 隐藏），则尽快停止摄像头采集以释放设备
+  useEffect(() => {
+    try {
+      const el = document.querySelector('.chatnew-video-frame');
+      if (el) {
+        const style = window.getComputedStyle(el);
+        if (style && style.display === 'none') {
+          // 设置全局标志，避免子组件再次尝试打开摄像头
+          window.__EMOTION_DETECTION_DISABLED = true;
+          // 调用全局停止接口（ChatWindow 在 mount 时会注册该函数）
+          if (typeof window.__stopEmotionStream === 'function') {
+            try { window.__stopEmotionStream(); } catch (e) { console.warn('Failed to call __stopEmotionStream', e); }
+          }
+          console.log('[ChatNew] Video frame hidden via CSS, emotion detection disabled temporarily');
+        }
+      }
+    } catch (e) {
+      console.warn('[ChatNew] Error checking video frame visibility', e);
+    }
+  }, []);
+
+  // 订阅 voice call store（用于将聊天框提升到页面级别）
+  useEffect(() => {
+    const unsub = subscribeVoiceCall((d) => {
+      setVoiceTranscript(d.transcript || null);
+      setVoiceResponse(d.response || null);
+    });
+    // initialize with current data
+    const current = getVoiceCallData();
+    setVoiceTranscript(current.transcript || null);
+    setVoiceResponse(current.response || null);
+    return () => unsub();
+  }, []);
+
   // Pipeline WebSocket 连接 - 接收情绪和脑电波数据
   useEffect(() => {
     let shouldReconnect = true;
@@ -134,32 +172,15 @@ export default function ChatNew() {
 
   // 将语音通话产生的消息发送到后端，由后端广播并由 ChatApp 的 WebSocket 接收显示
   const addSelfMessage = async (text) => {
+    // 全模态实时通话为主：不再把实时语音消息写入旧的 chat threads API。
     if (!activeThreadId) return;
-    try {
-      await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-        credentials: 'include',
-      });
-    } catch (err) {
-      console.error('Failed to post self message', err);
-    }
+    console.debug('[ChatNew] addSelfMessage skipped (all-modal realtime mode):', text.slice(0, 80));
   };
 
   const addAiMessage = async (text) => {
+    // 同上：不再写入 chat threads API
     if (!activeThreadId) return;
-    try {
-      // 以 system/assistant 身份写入 AI 消息（后端可能根据权限忽略此写入）
-      await fetch(`${API_PREFIX}/chat/threads/${activeThreadId}/messages`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, role: 'assistant' }),
-        credentials: 'include',
-      });
-    } catch (err) {
-      console.error('Failed to post AI message', err);
-    }
+    console.debug('[ChatNew] addAiMessage skipped (all-modal realtime mode):', text.slice(0, 80));
   };
 
   // 处理语音响应
@@ -208,7 +229,7 @@ export default function ChatNew() {
         </div>
         <EEGWaveformDisplay
           faceEmotion={pipelineEvent?.face_emotion}
-          eegWaveform={pipelineEvent?.eeg_waveform}
+          eegWaveform={pipelineEvent?.emotion}
           useRealData={useRealEEGData}
         />
         {showEEGControlPanel && (
@@ -227,6 +248,8 @@ export default function ChatNew() {
         </div>
 
         {/* 右侧消息区域已移除，消息显示由左侧 ChatApp（ChatWindow）负责，避免重复 */}
+        {/* 全局语音通话小聊天框（页面级） */}
+        <VoiceCallChatBox transcript={voiceTranscript} response={voiceResponse} className="voice-call-chatbox-page" />
       </div>
       
       {/* 语音通话控制区域 - 四个按钮 */}

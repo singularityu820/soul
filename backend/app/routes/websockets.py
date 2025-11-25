@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import logging
+import os
 import time
 import uuid
 from datetime import datetime
@@ -21,8 +22,12 @@ from ..dependencies import (
     get_real_eeg_processor,
     get_tts_service,
     get_voice_stream_hub,
+    get_speech_tool,
 )
+from ..dependencies import agent as global_agent, memory as agent_memory
+from ..services.chat.realtime_storage import RealtimeTranscriptStorage
 from ..schemas import ChatEvent, ChatMessage, PipelineEvent
+from ..schemas import EmotionState
 from ..services.chat.service import ChatService
 from ..services.emotion import EmotionPipeline
 from ..utils.audio import fetch_audio_from_url
@@ -198,8 +203,8 @@ async def voice_stream_websocket(
     
     qwen_session = None
     
-    # 从 Cookie 中获取 username
-    username = websocket.cookies.get("username")
+    # 从 Cookie 中获取 username；如未提供则回退到 query param（前端可能把 username 作为 query 参数传入）
+    username = websocket.cookies.get("username") or websocket.query_params.get("username")
     logger.info(f"[Qwen Omni] Voice stream WebSocket connected: {session_id}, username: {username}")
 
     try:
@@ -211,28 +216,44 @@ async def voice_stream_websocket(
         )
         
         chat_storage = get_chat_storage()
-        
-        # 定义转录回调：保存用户消息
+        realtime_storage = RealtimeTranscriptStorage()
+        speech_tool = get_speech_tool()
+
+        # 定义转录回调：将实时转录持久化到独立表，不触发 ChatService/agent 的后续处理
         def on_transcript(transcript: str):
-            """处理用户语音转录"""
+            """处理用户语音转录
+
+            持久化到 `realtime_transcripts`，以便保留通话记录但避免触发聊天服务的 agent 跟进。
+            若需要同时将实时转录写入主聊天存储以供历史查看/迁移，可设置 `SAVE_REALTIME_TRANSCRIPTS=1`。
+            """
             try:
                 logger.info(f"[Qwen Omni] User transcript: {transcript}")
-                
-                # 保存用户消息到数据库（关联username）
-                if username and transcript.strip():
+
+                if transcript and transcript.strip():
                     try:
-                        user_message = ChatMessage(
-                            message_id=uuid.uuid4().hex,
-                            thread_id=session_id,
-                            role="user",
-                            text=transcript,
-                            created_at=datetime.utcnow(),
-                            language="zh",
-                        )
-                        chat_storage.save_message(user_message, username)
-                        logger.info(f"[Qwen Omni] Saved user message for username: {username}")
+                        # always persist to dedicated realtime storage
+                        rt_id = uuid.uuid4().hex
+                        realtime_storage.save_transcript(rt_id, session_id, "user", transcript, {"username": username})
+                        logger.info(f"[Qwen Omni] Persisted realtime transcript id={rt_id} session={session_id}")
                     except Exception as e:
-                        logger.error(f"[Qwen Omni] Failed to save user message: {e}", exc_info=True)
+                        logger.error(f"[Qwen Omni] Failed to persist realtime transcript: {e}", exc_info=True)
+
+                    # optional: also save to main chat storage when explicit env var is set
+                    save_flag = os.environ.get("SAVE_REALTIME_TRANSCRIPTS", "0") == "1"
+                    if save_flag and username:
+                        try:
+                            user_message = ChatMessage(
+                                message_id=uuid.uuid4().hex,
+                                thread_id=session_id,
+                                role="user",
+                                text=transcript,
+                                created_at=datetime.utcnow(),
+                                language="zh",
+                            )
+                            chat_storage.save_message(user_message, username)
+                            logger.info(f"[Qwen Omni] Also saved user message to chat storage for username: {username}")
+                        except Exception as e:
+                            logger.error(f"[Qwen Omni] Failed to save user message to chat storage: {e}", exc_info=True)
             except Exception as e:
                 logger.error(f"[Qwen Omni] Error in transcript callback: {e}", exc_info=True)
         
@@ -241,31 +262,93 @@ async def voice_stream_websocket(
             """处理模型生成的音频"""
             # Qwen Omni 会在事件处理中自动发送音频到客户端
             pass
-        
-        # 定义工具调用回调：保留 agent 工具调用能力
+
+        # 定义工具调用回调：将模型的工具调用映射到本地 agent/memory 功能
         def on_tool_call(tool_call: Dict[str, Any]) -> Any:
-            """处理工具调用"""
+            """处理模型请求的工具调用（同步返回结果）。
+
+            支持的函数示例：
+            - memory.add_dialogue
+            - memory.add_event
+            - memory.search
+            - memory.snapshot
+            - agent.respond_with_context  (会调用 agent 并等待结果，返回简单结构)
+            """
             try:
-                from ..services.agent import ConversationalAgent
-                from ..dependencies import agent as global_agent
-                
-                function_name = tool_call.get("function", {}).get("name")
-                arguments = tool_call.get("function", {}).get("arguments", {})
-                
-                logger.info(f"[Qwen Omni] Tool call: {function_name}({arguments})")
-                
-                # 这里可以集成现有的 agent 工具
-                # 示例：调用记忆工具、情绪识别等
-                # result = global_agent.execute_tool(function_name, arguments)
-                
-                # 临时返回一个占位结果
-                result = {"status": "success", "message": f"工具 {function_name} 已执行"}
-                logger.info(f"[Qwen Omni] Tool result: {result}")
-                return result
-                
+                function = tool_call.get("function", {})
+                function_name = function.get("name")
+                arguments = function.get("arguments", {}) or {}
+
+                logger.info(f"[Qwen Omni] Tool call requested: {function_name} args={arguments}")
+
+                # 记忆相关操作（同步）
+                if function_name == "memory.add_dialogue":
+                    speaker = arguments.get("speaker", "user")
+                    utterance = arguments.get("utterance", "")
+                    record_id = agent_memory.add_dialogue(speaker, utterance)
+                    return {"status": "ok", "id": record_id}
+
+                if function_name == "memory.add_event":
+                    text = arguments.get("text")
+                    tags = arguments.get("tags")
+                    metadata = arguments.get("metadata")
+                    record_id = agent_memory.add_event(text, tags=tags, metadata=metadata)
+                    return {"status": "ok", "id": record_id}
+
+                if function_name == "memory.search":
+                    query = arguments.get("query", "")
+                    limit = int(arguments.get("limit", 5))
+                    items = agent_memory.search(query, limit=limit)
+                    # Convert to serializable form
+                    result = []
+                    for it in items:
+                        try:
+                            result.append({"id": getattr(it, 'record_id', None), "content": getattr(it, 'content', str(it))})
+                        except Exception:
+                            result.append({"content": str(it)})
+                    return {"status": "ok", "results": result}
+
+                if function_name == "memory.snapshot":
+                    snap = agent_memory.snapshot()
+                    return {"status": "ok", "snapshot": snap}
+
+                # agent 生成回复（异步）：我们同步等待结果（超时保护）
+                if function_name == "agent.respond":
+                    user_text = arguments.get("user_text")
+                    # use latest pipeline emotion if available
+                    emotion = None
+                    try:
+                        pipeline = get_pipeline()
+                        # get_pipeline is async in dependencies; pipeline is globally available too
+                        emotion = None
+                    except Exception:
+                        emotion = None
+
+                    loop = asyncio.get_event_loop()
+                    try:
+                        fut = asyncio.run_coroutine_threadsafe(
+                            global_agent.respond_with_context(emotion, user_text=user_text), loop
+                        )
+                        agent_message = fut.result(timeout=10)
+                        # Record agent message into memory
+                        try:
+                            agent_memory.record_agent_message(agent_message.text, proactive=False)
+                        except Exception:
+                            pass
+                        # Return key fields
+                        return {"status": "ok", "text": agent_message.text, "audio_reference": agent_message.audio_reference}
+                    except Exception as e:
+                        logger.exception(f"[Qwen Omni] agent.respond failed: {e}")
+                        return {"status": "error", "message": str(e)}
+
+                # 默认占位：返回一个简单成功响应
+                return {"status": "ok", "message": f"Executed {function_name}"}
+
             except Exception as e:
-                logger.error(f"[Qwen Omni] Tool call error: {e}", exc_info=True)
+                logger.exception(f"[Qwen Omni] Tool call error: {e}")
                 return {"status": "error", "message": str(e)}
+        
+        # (使用上面定义的 on_tool_call，将模型的工具调用映射到本地 agent/memory 功能)
         
         # 创建 Qwen Omni Realtime 配置
         config = QwenOmniRealtimeConfig(
@@ -279,12 +362,26 @@ async def voice_stream_websocket(
         qwen_hub = QwenOmniRealtimeHub(config=config)
         
         # 创建 Qwen Omni 会话
+        # 回调：当模型生成最终文本回复时，持久化为 realtime_transcripts（role=assistant）
+        def _on_model_response(text: str):
+            try:
+                if text and text.strip():
+                    rt_id = uuid.uuid4().hex
+                    try:
+                        realtime_storage.save_transcript(rt_id, session_id, "assistant", text, {"username": username})
+                        logger.info(f"[Qwen Omni] Persisted assistant transcript id={rt_id} session={session_id}")
+                    except Exception as e:
+                        logger.error(f"[Qwen Omni] Failed to persist assistant transcript: {e}", exc_info=True)
+            except Exception as e:
+                logger.exception(f"Error in on_model_response: {e}")
+
         qwen_session = await qwen_hub.create_session(
             websocket=websocket,
             session_id=session_id,
             on_transcript=on_transcript,
             on_audio=on_audio,
-            on_tool_call=on_tool_call
+            on_tool_call=on_tool_call,
+            on_response=_on_model_response,
         )
         
         logger.info(f"[Qwen Omni] Session {session_id} ready")
@@ -337,6 +434,28 @@ async def voice_stream_websocket(
                 logger.debug(f"[Qwen Omni] Received audio chunk: {len(audio_data)} bytes")
                 audio_b64 = base64.b64encode(audio_data).decode('ascii')
                 await qwen_session.append_audio(audio_b64)
+                # 异步发送音频到 speech emotion tool 并广播到 pipeline（用于前端 EEG 显示）
+                async def _process_speech_emotion(chunk: bytes):
+                    try:
+                        await speech_tool.update_from_audio(chunk)
+                        ch = await speech_tool.analyze()
+                        # 构造一个简化的 EmotionState 并广播
+                        emotion_state = EmotionState(
+                            label=ch.label,
+                            confidence=ch.confidence,
+                            mood_score=ch.mood_score,
+                            components=[ch],
+                        )
+                        try:
+                            pipeline = await get_pipeline()
+                            await pipeline._broadcast(PipelineEvent(emotion=emotion_state))
+                            logger.debug(f"[Qwen Omni] Broadcasted speech emotion: {ch.label}")
+                        except Exception as e:
+                            logger.exception(f"[Qwen Omni] Failed broadcasting pipeline event: {e}")
+                    except Exception as e:
+                        logger.exception(f"[Qwen Omni] Speech emotion processing failed: {e}")
+
+                asyncio.create_task(_process_speech_emotion(audio_data))
                 
             elif "text" in message:
                 # JSON 控制消息

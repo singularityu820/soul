@@ -187,6 +187,12 @@ export default function EEGWaveformDisplay({ faceEmotion, eegWaveform, useRealDa
     else if (eegWaveform && eegWaveform.waveform) {
       waveform = eegWaveform.waveform;
     }
+    // 如果 eegWaveform 中只有情绪标签（例如来自语音情绪检测），也用该标签生成模拟波形
+    else if (eegWaveform && (eegWaveform.label || eegWaveform.emotion)) {
+      const emotionLabel = eegWaveform.label || eegWaveform.emotion;
+      const confidence = eegWaveform.confidence || 0;
+      waveform = getWaveformFromEmotion(emotionLabel, confidence);
+    }
     // 如果都没有，但有面部情绪，则生成模拟波形
     else if (faceEmotion && (faceEmotion.label || faceEmotion.emotion)) {
       const faceLabel = faceEmotion.label || faceEmotion.emotion;
@@ -198,7 +204,7 @@ export default function EEGWaveformDisplay({ faceEmotion, eegWaveform, useRealDa
     }
     
     setDisplayWaveform(waveform);
-  }, [useRealData, isRealDataAvailable, cachedEEGWaveform, eegWaveform, faceEmotion, displayWaveform]);
+  }, [useRealData, isRealDataAvailable, cachedEEGWaveform, eegWaveform, faceEmotion]);
 
   // 如果没有波形数据，使用假数据（确保始终有数据显示）
   const finalWaveform = displayWaveform || generateMockWaveform();
@@ -233,8 +239,23 @@ export default function EEGWaveformDisplay({ faceEmotion, eegWaveform, useRealDa
     );
   };
 
+  // 迷你状态圆点颜色（用于 ChatNew 右上角紧凑显示）
+  const getMiniDotColor = () => {
+    if (!useRealData) return 'transparent';
+    if (deviceStatus === 'connected') return '#4CAF50';
+    if (deviceStatus === 'connecting') return '#FFC107';
+    if (deviceStatus === 'error') return '#F44336';
+    return '#888';
+  };
+
   return (
     <div className="eeg-waveform-display">
+      {/* 小圆点指示（最小化显示） */}
+      <div
+        className={`eeg-mini-dot ${deviceStatus === 'connected' ? 'connected' : ''}`}
+        style={{ backgroundColor: getMiniDotColor() }}
+        aria-hidden="true"
+      />
       {renderDeviceStatus()}
       <CanvasWaveformChart waveform={finalWaveform} transparent={true} />
     </div>

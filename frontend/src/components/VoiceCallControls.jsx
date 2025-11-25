@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQwenRealtime } from "../hooks/useQwenRealtime";
+import { setVoiceCallData } from "../utils/voiceCallStore";
 import "./VoiceCallControls.css";
 
 /**
@@ -53,6 +54,8 @@ export default function VoiceCallControls({
 
   // 实时更新转录文本
   useEffect(() => {
+    // 更新共享 store，页面层组件可订阅以显示聊天框
+    setVoiceCallData({ transcript: streamTranscript });
     if (streamTranscript && streamTranscript.trim()) {
       console.log("[VoiceCallControls] Transcript:", streamTranscript);
     }
@@ -60,6 +63,8 @@ export default function VoiceCallControls({
 
   // 实时更新响应文本
   useEffect(() => {
+    // 更新共享 store，页面层组件可订阅以显示聊天框
+    setVoiceCallData({ response: streamResponse });
     if (streamResponse && streamResponse.trim()) {
       console.log("[VoiceCallControls] Response:", streamResponse);
     }
@@ -247,21 +252,7 @@ export default function VoiceCallControls({
           <span className="status-text">{getStatusText()}</span>
         </div>
         
-        {/* 转录和响应显示 */}
-        {(streamTranscript || streamResponse) && (
-          <div className="voice-call-transcript">
-            {streamTranscript && (
-              <div className="transcript-user">
-                <strong>你：</strong> {streamTranscript}
-              </div>
-            )}
-            {streamResponse && (
-              <div className="transcript-ai">
-                <strong>AI：</strong> {streamResponse}
-              </div>
-            )}
-          </div>
-        )}
+        {/* 转录和响应显示已提升到页面级 VoiceCallChatBox 组件 */}
         
         {errorMessage && (
           <div className="voice-call-error">
@@ -283,7 +274,7 @@ export default function VoiceCallControls({
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 0 0-1.01.24l-1.57 1.97c-2.83-1.35-5.48-3.9-6.89-6.83l1.95-1.66c.27-.28.35-.67.24-1.02-.37-1.11-.56-2.3-.56-3.53 0-.54-.45-.99-.99-.99H4.19C3.65 3 3 3.24 3 3.99 3 13.28 10.73 21 20.01 21c.71 0 .99-.63.99-1.18v-3.45c0-.54-.45-.99-.99-.99z" fill="currentColor"/>
           </svg>
-          开始通话
+          <span className="btn-label">开始通话</span>
         </button>
 
         {/* 2. 暂停/恢复按钮 */}
@@ -298,14 +289,14 @@ export default function VoiceCallControls({
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M8 5v14l11-7z" fill="currentColor"/>
               </svg>
-              恢复
+                <span className="btn-label">恢复</span>
             </>
           ) : (
             <>
               <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" fill="currentColor"/>
               </svg>
-              暂停
+                <span className="btn-label">暂停</span>
             </>
           )}
         </button>
@@ -320,7 +311,7 @@ export default function VoiceCallControls({
           <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.956.956 0 0 1-.29-.7c0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.52-.29.7l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28a11.27 11.27 0 0 0-2.67-1.85.996.996 0 0 1-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z" fill="currentColor"/>
           </svg>
-          挂断
+          <span className="btn-label">挂断</span>
         </button>
 
         {/* 4. 发送语音消息按钮（仅在暂停时可用）*/}
@@ -334,7 +325,7 @@ export default function VoiceCallControls({
             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" fill="currentColor"/>
             <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" fill="currentColor"/>
           </svg>
-          语音消息
+          <span className="btn-label">语音消息</span>
         </button>
       </div>
     </div>

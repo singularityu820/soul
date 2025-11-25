@@ -10,8 +10,9 @@ from ..agent.agent import ConversationalAgent
 from .avatar import AvatarOrchestrator
 from .eeg import EEGEmotionClassifier, EEGSample, EEGStreamTool
 from .face import FaceEmotionTool
-# from ..agent.speech import SpeechEmotionTool  # <-- 已移除导入
+from ..agent.speech import SpeechEmotionTool
 from .fusion import EmotionFusionService
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ class EmotionPipeline:
         eeg_stream: EEGStreamTool,
         eeg_classifier: EEGEmotionClassifier,
         face_tool: FaceEmotionTool,
-        # speech_tool: SpeechEmotionTool,  # <-- 已移除 speech_tool 参数
+        speech_tool: SpeechEmotionTool | None,
         fusion: EmotionFusionService,
         avatar: AvatarOrchestrator,
         agent: ConversationalAgent,
@@ -32,7 +33,7 @@ class EmotionPipeline:
         self.eeg_stream = eeg_stream
         self.eeg_classifier = eeg_classifier
         self.face_tool = face_tool
-        # self.speech_tool = speech_tool  # <-- 已移除 self.speech_tool
+        self.speech_tool = speech_tool
         self.fusion = fusion
         self.avatar = avatar
         self.agent = agent
@@ -134,14 +135,26 @@ class EmotionPipeline:
                 sample: EEGSample = await self.eeg_stream.sample()
                 eeg_channel = await self.eeg_classifier.classify(sample)
                 face_channel = await self.face_tool.analyze()
-                # speech_channel = await self.speech_tool.analyze()  # <-- 已移除 speech_tool 调用
+
+                # 如果部署环境没有摄像头/EEG 可用，支持通过语音情绪回退为 EEG 通道。
+                # 控制开关：环境变量 `SPEECH_EMOTION_FALLBACK` 为 '1' 或 'true' 时启用。
+                use_speech_as_eeg = os.getenv("SPEECH_EMOTION_FALLBACK", "0").lower() in ("1", "true", "yes")
+                if use_speech_as_eeg and self.speech_tool is not None:
+                    try:
+                        speech_channel = await self.speech_tool.analyze()
+                        # 将语音情绪映射为一个 eeg 源的 ChannelEmotion
+                        eeg_channel = speech_channel.model_copy(update={"source": "eeg"})
+                        # 标记来源以便排查
+                        eeg_channel.metadata["via"] = "speech_fallback"
+                    except Exception:
+                        logger.exception("Failed to obtain speech emotion for fallback; using EEG classifier result")
                 
                 # 检查是否应该进行融合（控制融合频率）
                 current_time = time.time()
                 should_fuse = current_time - self._last_fusion_time >= self._fusion_interval
                 
                 if should_fuse:
-                    # 仅融合EEG和面部通道
+                    # 仅融合EEG和面部通道（当启用语音回退时，eeg_channel 可能来自语音）
                     fused = self.fusion.fuse([eeg_channel, face_channel])
                     self._last_fusion_time = current_time
                     

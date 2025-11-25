@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import Cookies from 'js-cookie';
 
 // Qwen Omni Realtime hook - 通过后端 WebSocket 代理连接
 // 后端处理 DashScope API 认证和会话管理
@@ -150,11 +151,17 @@ export function useQwenRealtime() {
     return () => clearInterval(interval);
   }, [flushPlayQueue]);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (sessionId) => {
     try {
       setError(null);
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) return;
-      const ws = new WebSocket(REALTIME_BASE);
+      // Append session_id and username as query params to ensure backend can associate transcripts
+      const params = new URLSearchParams();
+      if (sessionId) params.append('session_id', sessionId);
+      const username = Cookies.get && Cookies.get('username');
+      if (username) params.append('username', username);
+      const wsUrl = params.toString() ? `${REALTIME_BASE}?${params.toString()}` : REALTIME_BASE;
+      const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       await new Promise((resolve, reject) => {
@@ -195,13 +202,30 @@ export function useQwenRealtime() {
             break;
             
           case 'transcript':
-            // 用户语音转录
+            // 兼容旧格式：将 transcript 视为模型输出的辅助信号，映射到 response
             if (data.text) {
               if (data.is_final) {
-                setTranscript(data.text);
+                setResponse(data.text);
               } else {
-                // 增量转录
-                setResponse(prev => prev + data.text);
+                setResponse(prev => (prev || '') + data.text);
+              }
+            }
+            break;
+          
+          case 'input_audio_transcription.completed':
+            // 后端转发的独立 ASR 完成事件 —— 这是用户的真实 ASR 文本，写入 transcript
+            if (data.text) {
+              setTranscript(data.text);
+            }
+            break;
+
+          case 'model_transcript':
+            // 模型端转录（模型自己对音频的转写或生成文本），映射到 response
+            if (data.text) {
+              if (data.is_final) {
+                setResponse(data.text);
+              } else {
+                setResponse(prev => (prev || '') + data.text);
               }
             }
             break;
@@ -242,6 +266,20 @@ export function useQwenRealtime() {
             if (!isPlayingRef.current && playQueueRef.current.length > 0) {
               console.log('[Qwen Omni] Starting playback after response done');
               flushPlayQueue();
+            }
+            break;
+
+          case 'response_chunk':
+            // AI 文本流式片段
+            if (data.text) {
+              setResponse(prev => (prev || '') + data.text);
+            }
+            break;
+
+          case 'response':
+            // AI 最终文本
+            if (data.text) {
+              setResponse(data.text);
             }
             break;
             
