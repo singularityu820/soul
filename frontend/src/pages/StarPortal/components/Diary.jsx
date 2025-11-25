@@ -627,6 +627,11 @@ export default function Diary() {
     setStarted(true);
     // 移除自动翻到第2页的代码，保持在封面页（第1页）
   };
+
+  // 在组件挂载时自动调用handleStart，实现直接打开日记的效果
+  useEffect(() => {
+    handleStart();
+  }, []);
   
   // 翻页按钮（如果需要在 UI 中使用）
   const goPrev = () => { 
