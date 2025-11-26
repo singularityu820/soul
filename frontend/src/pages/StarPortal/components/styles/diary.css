@@ -295,21 +295,7 @@
    */
 }
 
-.diary-text-display.diary-text--typing::after {
-  content: "|";
-  animation: blink 1s infinite;
-  margin-left: 2px;
-  color: #2c3e50;
-}
-
-@keyframes blink {
-  0%, 50% {
-    opacity: 1;
-  }
-  51%, 100% {
-    opacity: 0;
-  }
-}
+/* 移除了文字动画相关样式，现在文字直接完整显示 */
 
 /* 编辑功能样式 */
 
