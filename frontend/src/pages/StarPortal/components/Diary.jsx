@@ -239,7 +239,7 @@ export default function Diary() {
   // 播放翻页音效的函数（同步执行，不等待）
   const playTurnSoundImmediately = useCallback(() => {
     if (!turnSoundRef.current) return;
-    console.log("播放音效");
+    //console.log("播放音效");
     // 防重复播放：如果 300ms 内已经播放过，或者音频正在播放，则跳过
     const now = Date.now();
     const audio = turnSoundRef.current;
@@ -340,6 +340,7 @@ export default function Diary() {
       return { diary_num: 0, diary_id: [], diary_content: [] };
     }
   };
+  window.getFormattedDiaries = getFormattedDiaries;
   const updateDiaryContent = async (diaryId, newContent) => {
   try {
     // 注意：这里使用 /api 前缀，利用 Vite 代理转发到后端
@@ -372,6 +373,52 @@ export default function Diary() {
     console.error('❌ 更新出错:', error);
     //alert('更新失败，请检查控制台');
   }
+  };
+  /**
+ * 创建新日记 (带默认元数据)
+ * @param {string} userId - 用户ID
+ * @param {string} content - 日记内容
+ * @returns {Promise<string|null>} - 成功返回 diary_id，失败返回 null
+ */
+  const createNewDiary = async (userId, content) => {
+    try {
+      // 1. 准备请求数据
+      const requestBody = {
+        user_id: userId,
+        title: new Date().toLocaleDateString() + " 的日记",
+        content: content,
+        emotion_tags: [], 
+        metadata: {
+          "location": "未知",
+          "weather": "未知",
+          "mood_score": -1
+        }
+      };
+      // 2. 发送请求
+      const response = await fetch('/api/diary/', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `创建失败: ${response.status}`);
+      }
+
+      // 3. 返回 ID
+      const data = await response.json();
+      console.log("✅ 日记创建成功，ID:", data.diary_id);
+      return data.diary_id;
+
+    } catch (error) {
+      console.error("❌ 创建日记请求出错:",`user_id:${userId}    content:${content}`, error);
+
+      return null;
+    }
   };
   // 初始化音频并预加载
   useEffect(() => {
@@ -503,7 +550,7 @@ export default function Diary() {
             // start 事件在翻页开始时立即触发
             // 注意：page 参数可能是对象，需要检查
             const pageNum = typeof page === 'number' ? page : (page?.page || 1);
-            console.log('翻页开始 start 事件', 'page:', pageNum, 'page type:', typeof page);
+            //console.log('翻页开始 start 事件', 'page:', pageNum, 'page type:', typeof page);
             isTurningRef.current = true; // 标记正在翻页
             // 确保在翻页开始时立即播放声音
             playTurnSoundImmediately();
@@ -646,22 +693,21 @@ export default function Diary() {
     // 1. 获取引用中的最新数据
     const allTexts = pageTextsRef.current;
     const allIds = pageIdsRef.current;
-
+    
     // 简单校验
     if (!allIds || allIds.length === 0) {
-      alert("数据未加载完成或没有日记ID，无法保存！");
-      return;
+      console.log("当前不存在原日记数据")
     }
-
+    
     console.group("💾 正在保存日记...");
     
     // 2. 收集所有需要保存的任务 (Promise)
     const saveTasks = [];
     let savedCount = 0;
-
+    let creatCount = 0;
     // 遍历索引 1 到 6 (对应6篇日记)
     for (let i = 1; i <= 6; i++) {
-      const diaryId = allIds[i];
+      let diaryId = allIds[i];
       const content = allTexts[i];
 
       // 只有当 ID 存在时才执行更新 (防止更新空页或未加载的页)
@@ -680,6 +726,25 @@ export default function Diary() {
             
           saveTasks.push(task);
         }
+      }else
+      {
+        if (content !== undefined && content !== "")
+        {
+          const task = createNewDiary(Cookies.get('username'),content).
+            then(
+              
+              res => {
+              pageIdsRef.current[i] = res;
+              console.log("新建id为",res);
+              if(res) {
+                savedCount++; // 统计成功数量
+                creatCount++;
+              }
+              return res;
+            });
+          saveTasks.push(task);
+          
+        }
       }
     }
 
@@ -694,7 +759,7 @@ export default function Diary() {
       // 等待所有请求完成
       await Promise.all(saveTasks);
       
-      console.log(`✅ 批量保存完成，共处理 ${saveTasks.length} 条数据`);
+      console.log(`✅ 批量保存完成，共处理 ${saveTasks.length}条数据,其中新建了${creatCount} 条数据`);
       alert(`保存成功！已同步 ${savedCount} 篇日记。`);
       
     } catch (error) {
@@ -724,10 +789,6 @@ export default function Diary() {
         const targetPageIndex = i + 1;
         if (targetPageIndex > 6) break;
         editPageContent(init_diary.diary_content[i], targetPageIndex);
-        // 5. (如果你需要存ID) 更新ID
-        // 注意：pageTexts 是数组，不能直接 .diary_id
-        // 建议使用一个新的 ref 来存: pageIdsRef.current[targetPageIndex] = ...
-        // 或者如果只是临时用，可以忽略这一步
         pageIdsRef.current[targetPageIndex] = init_diary.diary_id[i];
       }
     };
