@@ -5,6 +5,16 @@ import "turn.js";
 import turnVoiceSound from "./styles/turn-voice.mp3";
 import { log } from "three";
 import Cookies from "js-cookie";
+import ImageGeneration from '../../../components/ImageGeneration';
+import './styles/Diary.css';
+import './styles/DiarySave.css';
+import { 
+  generateImageWithEmotion, 
+  adjustImage, 
+  getEmotionTypes, 
+  base64ToImageUrl, 
+  getFullImageUrl 
+} from '../../../services/imageGenerationService';
 export default function Diary() {
   const [started, setStarted] = useState(false);
   const [coverSize, setCoverSize] = useState({ w: 360, h: 480 }); // 默认尺寸
@@ -18,6 +28,54 @@ export default function Diary() {
   const lastSoundPlayTimeRef = useRef(0); // 记录上次播放时间，防止重复播放
   const isTurningRef = useRef(false); // 标记是否正在翻页，防止重复触发
   let errorTimes = 0;
+  
+  // DOM缓存，减少重复查询
+  const pageElementsCache = useRef(new Map());
+  
+  // 获取页面元素的辅助函数，使用缓存
+  const getPageElement = useCallback((pageNum) => {
+    if (!flipRef.current) return null;
+    
+    // 检查缓存
+    if (pageElementsCache.current.has(pageNum)) {
+      const cachedElement = pageElementsCache.current.get(pageNum);
+      // 检查元素是否仍在DOM中
+      if (document.contains(cachedElement)) {
+        return cachedElement;
+      } else {
+        // 如果元素不在DOM中，从缓存中移除
+        pageElementsCache.current.delete(pageNum);
+      }
+    }
+    
+    // 缓存中没有或已失效，重新查询
+    const pageEl = flipRef.current.querySelector(`[data-page="${pageNum}"]`);
+    if (pageEl) {
+      // 添加到缓存
+      pageElementsCache.current.set(pageNum, pageEl);
+    }
+    
+    return pageEl;
+  }, []);
+  
+  // 清理缓存的函数
+  const clearPageElementsCache = useCallback(() => {
+    pageElementsCache.current.clear();
+  }, []);
+  
+  // 新增状态管理
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [generatedImage, setGeneratedImage] = useState(null);
+  const [emotionTags, setEmotionTags] = useState([]);
+  const [showAdjustmentOptions, setShowAdjustmentOptions] = useState(false);
+  const [currentPrompt, setCurrentPrompt] = useState('');
+  const [imageGenerationError, setImageGenerationError] = useState(null);
+  
+  // 文生图界面相关的状态管理
+  const [isDiaryOpen, setIsDiaryOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [showImageGeneration, setShowImageGeneration] = useState(false);
+  const [diaryContentForImage, setDiaryContentForImage] = useState('');
   // 每页的文字内容（可按实际需求修改）
   // 每页的文字内容
   const pageTexts = useMemo(() => {
@@ -84,25 +142,23 @@ export default function Diary() {
     //          第 2 篇日记 -> Turn.js 的第 5 页 (2 * 2 + 1)
     const targetTurnPage = pageIndex * 2 + 1;
 
-    if (flipRef.current) {
-      // 精准定位到那一页的 DOM 节点
-      const pageEl = flipRef.current.querySelector(`[data-page="${targetTurnPage}"]`);
-      
-      if (pageEl) {
-        const textEl = pageEl.querySelector(".diary-text-display");
-        if (textEl) {
-          textEl.textContent = newText;
-          
-          // 如果有打字机效果的残留类名，建议移除以防样式冲突
-          textEl.classList.remove("diary-text--typing");
-          
-          console.log(`✅ 已更新第 ${pageIndex} 篇日记 (Turn页码 ${targetTurnPage})`);
-        } else {
-            console.warn(`未找到页面 ${targetTurnPage} 的文字容器 .diary-text-display`);
-        }
+    // 使用缓存的getPageElement函数
+    const pageEl = getPageElement(targetTurnPage);
+    
+    if (pageEl) {
+      const textEl = pageEl.querySelector(".diary-text-display");
+      if (textEl) {
+        textEl.textContent = newText;
+        
+        // 如果有打字机效果的残留类名，建议移除以防样式冲突
+        textEl.classList.remove("diary-text--typing");
+        
+        console.log(`✅ 已更新第 ${pageIndex} 篇日记 (Turn页码 ${targetTurnPage})`);
+      } else {
+          console.warn(`未找到页面 ${targetTurnPage} 的文字容器 .diary-text-display`);
       }
     }
-  }, []);
+  }, [getPageElement]);
   const computeSize = useCallback(() => {
     const parent = containerRef.current;
     if (!parent) return { w: 360, h: 480 };
@@ -139,7 +195,6 @@ export default function Diary() {
 
   // 文字函数 - 直接显示完整文字，不再使用动画
   const animateText = useCallback((pageNum) => {
-
     // 封面页（第1页）和左侧页面（偶数页）不显示文字
     // 只有右侧页面（奇数页，从3开始）才显示文字
     if (pageNum === 1 || pageNum % 2 === 0) {
@@ -154,82 +209,30 @@ export default function Diary() {
     animationTimersRef.current.forEach(timer => clearTimeout(timer));
     animationTimersRef.current = [];
 
-    // 延迟执行，确保 Turn.js 完成 DOM 操作
-    setTimeout(() => {
-      // 获取文字内容（优先使用 ref）
-      const texts = pageTextsRef.current.length > 0 ? pageTextsRef.current : pageTexts;
-      const text = texts[textIndex] || "";
+    // 获取文字内容（优先使用 ref）
+    const texts = pageTextsRef.current.length > 0 ? pageTextsRef.current : pageTexts;
+    const text = texts[textIndex] || "";
 
-      if (!text) {
-        return;
+    if (!text) {
+      return;
+    }
+
+    // 使用缓存的getPageElement函数直接获取页面元素
+    const pageEl = getPageElement(pageNum);
+    if (pageEl) {
+      const textEl = pageEl.querySelector(".diary-text-display");
+      if (textEl) {
+        // 直接设置完整文字，不再使用动画
+        try {
+          textEl.textContent = text;
+          // 确保移除打字效果的类
+          textEl.classList.remove("diary-text--typing");
+        } catch (err) {
+          console.warn("Failed to set text content:", err);
+        }
       }
-
-      // 简化元素查找：优先使用 Turn.js view API，失败则使用 data-page
-      let textEl = null;
-      let retryCount = 0;
-      const maxRetries = 8; // 增加重试次数
-
-      const findTextElement = () => {
-        // 方式1: 直接通过 data-page 属性查找（最可靠，因为所有页面都渲染了）
-        const pageEl = flipRef.current?.querySelector(`[data-page="${pageNum}"]`);
-        if (pageEl) {
-          textEl = pageEl.querySelector(".diary-text-display");
-          if (textEl) {
-            return true;
-          }
-        }
-
-        // 方式2: 通过 Turn.js 的 view API 获取当前可见页元素（备用）
-        if (flipRef.current && $.fn && $.fn.turn) {
-          try {
-            const currentPageFromTurn = $(flipRef.current).turn("page");
-
-            if (currentPageFromTurn === pageNum) {
-              const turnPage = $(flipRef.current).turn("view");
-              // turnPage 是 jQuery 对象，需要获取原生 DOM 元素
-              if (turnPage && turnPage.length > 0) {
-                const pageElement = turnPage.get(0) || turnPage[0];
-                // 确保是 DOM 元素
-                if (pageElement && pageElement.nodeType === 1) {
-                  const foundEl = pageElement.querySelector ? pageElement.querySelector(".diary-text-display") : null;
-                  if (foundEl) {
-                    textEl = foundEl;
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch (e) {
-            // 忽略错误
-          }
-        }
-
-        return false;
-      };
-
-      // 重试查找元素
-      const tryFind = () => {
-        if (findTextElement() || retryCount >= maxRetries) {
-          if (textEl) {
-            // 直接设置完整文字，不再使用动画
-            try {
-              textEl.textContent = text;
-              // 确保移除打字效果的类
-              textEl.classList.remove("diary-text--typing");
-            } catch (err) {
-              console.warn("Failed to set text content:", err);
-            }
-          }
-        } else {
-          retryCount++;
-          setTimeout(tryFind, 200); // 减少重试延迟
-        }
-      };
-
-      // 开始查找元素并设置文字
-      tryFind();
-    }, 50); // 增加延迟确保 DOM 更新完成
-  }, [pageTexts]);
+    }
+  }, [pageTexts, getPageElement]);
 
   // 同步 animateText 到 ref，确保 end 事件回调总是调用最新版本
   useEffect(() => {
@@ -343,7 +346,7 @@ export default function Diary() {
   window.getFormattedDiaries = getFormattedDiaries;
   const updateDiaryContent = async (diaryId, newContent) => {
   try {
-    // 注意：这里使用 /api 前缀，利用 Vite 代理转发到后端
+    // 使用相对路径，让Vite代理转发到后端
     const response = await fetch(`/api/diary/${diaryId}`, {
       method: 'PUT', // 根据文档，更新使用 PUT 方法
       headers: {
@@ -394,8 +397,8 @@ export default function Diary() {
           "mood_score": -1
         }
       };
-      // 2. 发送请求
-      const response = await fetch('/api/diary/', {
+      // 2. 发送请求 - 使用相对路径，让Vite代理转发到后端
+      const response = await fetch(`/api/diary/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -420,17 +423,105 @@ export default function Diary() {
       return null;
     }
   };
-  // 初始化音频并预加载
+
+  /**
+   * 处理图片调整请求
+   * @param {string} adjustmentType - 调整类型 ("warmer", "more_detail", "change_scene")
+   */
+  const handleImageAdjustment = async (adjustmentType) => {
+    try {
+      // 检查是否正在生成图片
+      if (isGeneratingImage) {
+        console.log('图片正在生成中，请稍候...');
+        return;
+      }
+      
+      // 获取所有日记内容
+      const allTexts = pageTextsRef.current;
+      let allDiaryContent = "";
+      
+      for (let i = 1; i <= 6; i++) {
+        const content = allTexts[i];
+        if (content && content.trim() !== "") {
+          allDiaryContent += content + "\n\n";
+        }
+      }
+      
+      // 检查日记内容是否为空
+      if (!allDiaryContent || allDiaryContent.trim() === "") {
+        setImageGenerationError('日记内容为空，无法调整图片');
+        return;
+      }
+      
+      // 设置加载状态
+      setIsGeneratingImage(true);
+      setImageGenerationError(null);
+      
+      // 将英文调整类型转换为中文
+      let adjustmentTypeChinese = "";
+      switch(adjustmentType) {
+        case "warmer":
+          adjustmentTypeChinese = "风格更暖";
+          break;
+        case "more_detail":
+          adjustmentTypeChinese = "增加细节";
+          break;
+        case "change_scene":
+          adjustmentTypeChinese = "更换场景";
+          break;
+        default:
+          adjustmentTypeChinese = adjustmentType;
+      }
+      
+      // 调用imageGenerationService中的adjustImage函数
+      const result = await adjustImage({
+        original_prompt: currentPrompt || allDiaryContent,
+        emotion: emotionTags.length > 0 ? emotionTags[0] : '平静',
+        adjustment_type: adjustmentTypeChinese,
+        size: "1024x1024",
+        seed: -1,
+        save_to_disk: true
+      });
+      
+      // 检查结果
+      if (result.success) {
+        // 更新图片URL
+        const imageUrl = result.image_url ? getFullImageUrl(result.image_url) : base64ToImageUrl(result.base64_data);
+        setGeneratedImage(imageUrl);
+        setCurrentPrompt(result.original_prompt || currentPrompt);
+      } else {
+        setImageGenerationError(result.message || '调整图片失败');
+      }
+      
+    } catch (error) {
+      console.error("图片调整失败:", error);
+      setImageGenerationError('调整图片失败: ' + error.message);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+  // 优化的音频初始化 - 使用ref避免重复加载
   useEffect(() => {
-    if (turnSoundRef.current) return;
-    turnSoundRef.current = new Audio(turnVoiceSound);
-    turnSoundRef.current.volume = 0.5; // 设置音量
-    turnSoundRef.current.preload = "auto"; // 预加载音频
-    // 强制加载音频到内存
-    turnSoundRef.current.load();
+    // 如果已经加载过音频，不再重复加载
+    if (turnSoundRef.current) {
+      return;
+    }
+
+    try {
+      turnSoundRef.current = new Audio(turnVoiceSound);
+      turnSoundRef.current.volume = 0.5;
+      turnSoundRef.current.preload = "auto";
+      // 强制加载音频到内存
+      turnSoundRef.current.load();
+    } catch (err) {
+      console.warn("Failed to initialize audio:", err);
+    }
+
+    // 清理函数 - 确保组件卸载时释放资源
     return () => {
       if (turnSoundRef.current) {
         turnSoundRef.current.pause();
+        turnSoundRef.current.src = "";
         turnSoundRef.current = null;
       }
     };
@@ -444,10 +535,10 @@ export default function Diary() {
         const textIndex = Math.floor((targetPageNum - 3) / 2) + 1;
         const content = pageTextsRef.current[textIndex] || "";
 
-        // 2. 找到目标页面的 DOM
-        const bookEl = flipRef.current;
-        // 使用属性选择器精准定位
-        const targetPageEl = bookEl.querySelector(`[data-page="${targetPageNum}"]`);
+        if (!content) return; // 如果内容为空，直接返回
+
+        // 2. 使用缓存的getPageElement函数找到目标页面的 DOM
+        const targetPageEl = getPageElement(targetPageNum);
         
         if (targetPageEl) {
           const textDisplayEl = targetPageEl.querySelector(".diary-text-display");
@@ -462,7 +553,7 @@ export default function Diary() {
         console.warn("预渲染文字出错:", err);
       }
     }
-  }, []);
+  }, [getPageElement]);
  
   const initFlip = useCallback(() => {
     if (!containerRef.current || !flipRef.current || !$.fn || !$.fn.turn) return;
@@ -478,7 +569,7 @@ export default function Diary() {
     let isHandling = false;
     let isInitialLoad = true; // 标志：是否为初始加载
 
-    // 页面切换时直接显示文字，不再使用动画
+    // 优化后的页面切换处理函数 - 减少延迟和DOM操作
     const handlePageChange = (event, page, view) => {
       try {
         // 【核心修复】获取当前视图中的所有页码 (例如 [6, 7])
@@ -495,36 +586,34 @@ export default function Diary() {
         animationTimersRef.current.forEach(timer => clearTimeout(timer));
         animationTimersRef.current = [];
 
-        // 延迟执行，确保 DOM 渲染完毕
-        setTimeout(() => {
-          try {
-            // 【核心修复】遍历当前可见的所有页面，找到右侧页面（奇数页）进行更新
-            currentView.forEach(p => {
-              // p 是页码。我们只关心大于1的奇数页（右侧有字的页面）
-              if (p > 1 && p % 2 !== 0) {
-                 // 计算文字索引
-                 const textIndex = Math.floor((p - 3) / 2) + 1;
-                 // 从 Ref 获取数据
-                 const texts = pageTextsRef.current.length > 0 ? pageTextsRef.current : pageTexts;
-                 const text = texts[textIndex] || "";
-                 
-                 // 查找并更新 DOM
-                 const pageEl = el.querySelector(`[data-page="${p}"]`);
-                 if (pageEl) {
-                   const textEl = pageEl.querySelector(".diary-text-display");
-                   if (textEl) {
-                     textEl.textContent = text;
-                     // console.log(`[Fix] 已修复显示第 ${p} 页 (日记篇章 ${textIndex}) 的文字`);
-                   }
+        // 【优化】直接更新文字内容，不使用延迟
+        try {
+          // 【核心修复】遍历当前可见的所有页面，找到右侧页面（奇数页）进行更新
+          currentView.forEach(p => {
+            // p 是页码。我们只关心大于1的奇数页（右侧有字的页面）
+            if (p > 1 && p % 2 !== 0) {
+               // 计算文字索引
+               const textIndex = Math.floor((p - 3) / 2) + 1;
+               // 从 Ref 获取数据
+               const texts = pageTextsRef.current.length > 0 ? pageTextsRef.current : pageTexts;
+               const text = texts[textIndex] || "";
+               
+               // 使用缓存的getPageElement函数查找并更新 DOM
+               const pageEl = getPageElement(p);
+               if (pageEl) {
+                 const textEl = pageEl.querySelector(".diary-text-display");
+                 if (textEl) {
+                   textEl.textContent = text;
+                   // console.log(`[Fix] 已修复显示第 ${p} 页 (日记篇章 ${textIndex}) 的文字`);
                  }
-              }
-            });
-          } catch (err) {
-            console.warn("Failed to set text content:", err);
-          } finally {
-            isHandling = false;
-          }
-        }, 200); // 保持延迟
+               }
+            }
+          });
+        } catch (err) {
+          console.warn("Failed to set text content:", err);
+        } finally {
+          isHandling = false;
+        }
 
       } catch (e) {
         console.warn("[PAGE CHANGE] Error in handlePageChange:", e);
@@ -568,23 +657,20 @@ export default function Diary() {
             // playTurnSoundImmediately();
           //写入文字
           
-          // 在翻页开始时清除当前页的文字（延迟执行，不阻塞音频播放）
-          setTimeout(() => {
-
-            try {
-              const currentPage = $(el).turn("page");
-              const pageEl = el.querySelector(`[data-page="${currentPage}"]`);
-              if (pageEl) {
-                const textEl = pageEl.querySelector(".diary-text-display");
-                if (textEl) {
-                  textEl.textContent = "";
-                  textEl.classList.remove("diary-text--typing");
-                }
+          // 在翻页开始时清除当前页的文字（使用缓存提高性能）
+          try {
+            const currentPage = $(el).turn("page");
+            const pageEl = getPageElement(currentPage);
+            if (pageEl) {
+              const textEl = pageEl.querySelector(".diary-text-display");
+              if (textEl) {
+                textEl.textContent = "";
+                textEl.classList.remove("diary-text--typing");
               }
-            } catch (e) {
-              console.warn("[TURNING EVENT] Error clearing text:", e);
             }
-          }, 0);
+          } catch (e) {
+            console.warn("[TURNING EVENT] Error clearing text:", e);
+          }
         },
         turned: (event, page, view) => {
           // 确保文字动画在页面完全转向后也能触发
@@ -650,22 +736,48 @@ export default function Diary() {
       }
     }, 100);
 
-  }, [computeSize, animateText, playTurnSoundImmediately]);
+  }, [computeSize, animateText, playTurnSoundImmediately, getPageElement]);
 
   useEffect(() => {
     if (!started) return;
     initFlip();
-    const onResize = () => {
-      const { w, h } = computeSize();
-      try {
-        $(flipRef.current).turn("size", w, h);
-      } catch (_) {}
+    
+    let resizeTimer = null;
+    
+    const handleResize = () => {
+      // 清除之前的定时器
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
+      
+      // 设置新的定时器，延迟执行
+      resizeTimer = setTimeout(() => {
+        if (flipRef.current && $(flipRef.current).turn) {
+          try {
+            // 获取当前页码
+            const currentPage = $(flipRef.current).turn("page");
+            
+            // 重新计算尺寸并应用
+            const { w, h } = computeSize();
+            $(flipRef.current).turn("size", w, h);
+            
+            // 恢复当前页码
+            $(flipRef.current).turn("page", currentPage);
+          } catch (e) {
+            console.warn("Failed to handle resize:", e);
+          }
+        }
+      }, 300); // 300ms 防抖延迟
     };
-    window.addEventListener("resize", onResize);
+    
+    window.addEventListener("resize", handleResize);
     // 单页模式：保留在第 1 页作为封面页
 
     return () => {
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("resize", handleResize);
+      if (resizeTimer) {
+        clearTimeout(resizeTimer);
+      }
       // 清理动画定时器
       animationTimersRef.current.forEach(timer => clearTimeout(timer));
       animationTimersRef.current = [];
@@ -681,7 +793,7 @@ export default function Diary() {
         $(flipRef.current).turn("destroy");
       } catch (_) {}
     };
-  }, [started, initFlip, computeSize]);
+  }, [started, computeSize]); // 只依赖computeSize
 
   const handleStart = () => {
     setStarted(true);
@@ -705,10 +817,17 @@ export default function Diary() {
     const saveTasks = [];
     let savedCount = 0;
     let creatCount = 0;
+    let diaryContents = []; // 存储所有日记内容，用于文生图
+    
     // 遍历索引 1 到 6 (对应6篇日记)
     for (let i = 1; i <= 6; i++) {
       let diaryId = allIds[i];
       const content = allTexts[i];
+
+      // 收集非空日记内容用于文生图
+      if (content && content.trim() !== "") {
+        diaryContents.push(content);
+      }
 
       // 只有当 ID 存在时才执行更新 (防止更新空页或未加载的页)
       if (diaryId) {
@@ -760,7 +879,18 @@ export default function Diary() {
       await Promise.all(saveTasks);
       
       console.log(`✅ 批量保存完成，共处理 ${saveTasks.length}条数据,其中新建了${creatCount} 条数据`);
-      alert(`保存成功！已同步 ${savedCount} 篇日记。`);
+      
+      // 4. 如果有日记内容，显示文生图界面
+      if (diaryContents.length > 0) {
+        // 合并所有日记内容作为提示词
+        const combinedContent = diaryContents.join("\n\n");
+        setDiaryContentForImage(combinedContent);
+        setShowImageGeneration(true);
+        
+        alert(`保存成功！已同步 ${savedCount} 篇日记。`);
+      } else {
+        alert(`保存成功！已同步 ${savedCount} 篇日记。`);
+      }
       
     } catch (error) {
       console.error("❌ 批量保存过程中出现错误:", error);
@@ -939,7 +1069,24 @@ export default function Diary() {
         onMouseLeave={(e) => e.target.style.opacity = 0.8}
         title="保存日记"
       >
+        保存并文生图
       </div>
+      
+      {/* 文生图界面 - 直接使用ImageGeneration组件，去掉外层模态框 */}
+      <ImageGeneration 
+        isVisible={showImageGeneration}
+        diaryContent={diaryContentForImage}
+        onClose={() => setShowImageGeneration(false)}
+        onSave={(data) => {
+          // 将生成的图片和情绪信息传递回Diary组件
+          if (data.generatedImage) {
+            setGeneratedImage(data.generatedImage);
+            setEmotionTags(data.emotion ? [data.emotion] : []);
+            setShowAdjustmentOptions(true);
+          }
+          setShowImageGeneration(false);
+        }}
+      />
     </div>
   );
 }

@@ -9,5 +9,6 @@
   "1234-gamerate": "{\"message\":{\"rate\":0}}",
   "testuser-gamerate": "{\"message\":{\"rate\":0}}",
   "admin": "{\"message\":\"admin\"}",
-  "admin-gamerate": "{\"message\":{\"rate\":0}}"
+  "admin-gamerate": "{\"message\":{\"rate\":0}}",
+  "aaa-gamerate": "{\"message\":{\"rate\":0}}"
 }

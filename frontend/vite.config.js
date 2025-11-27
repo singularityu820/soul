@@ -15,7 +15,15 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:8000",
         changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
+        // 移除rewrite规则，保持/api前缀
+      },
+      "/volcano-image-emotion": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/generated_images": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
       },
       "/ws": {
         target: "ws://localhost:8000",

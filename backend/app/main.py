@@ -8,9 +8,10 @@ from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from .dependencies import pipeline
-from .routes import audio, chat, diary, eeg, emotion, health, info, video, websockets
+from .routes import audio, chat, diary, eeg, emotion, health, info, video, websockets, image, volcano_image_routes, volcano_image_emotion_routes
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -45,3 +46,12 @@ app.include_router(video.router, tags=["video"])
 app.include_router(eeg.router, tags=["eeg"])
 app.include_router(diary.router, prefix="/api/diary", tags=["diary"])
 app.include_router(websockets.router, tags=["websockets"])
+# 注册图片生成路由
+app.include_router(image.router)
+app.include_router(volcano_image_routes.router)
+app.include_router(volcano_image_emotion_routes.router)
+
+# 挂载静态文件服务 - 放在路由注册之后
+app.mount("/static", StaticFiles(directory="."), name="static")
+app.mount("/generated_images", StaticFiles(directory="generated_images"), name="generated_images")
+app.mount("/", StaticFiles(directory=".", html=True), name="frontend")
