@@ -807,7 +807,7 @@ export default function Diary() {
           style={{ 
             width: `${coverSize.w}px`, 
             height: `${coverSize.h}px`,
-            backgroundImage: `url('/img/diary/diaryTitlePage.png')`,
+            backgroundImage: `url('/img/diary/diaryTitlePage.jpg')`,
             backgroundSize: 'cover',
             backgroundPosition: 'center'
           }}
@@ -827,7 +827,7 @@ export default function Diary() {
           className="diary-page diary-page--cover" 
           data-page={1}
           style={{ 
-            backgroundImage: `url('/img/diary/diaryTitlePage.png')`, 
+            backgroundImage: `url('/img/diary/diaryTitlePage.jpg')`, 
             backgroundSize: 'cover', 
             backgroundPosition: 'center',
             cursor: 'pointer' 
@@ -924,12 +924,12 @@ export default function Diary() {
           position: 'absolute',
           bottom: '20px',
           right: '20px',
-          backgroundColor: 'rgba(0, 128, 0, 0.7)',
-          color: 'white',
-          padding: '10px 20px',
-          borderRadius: '5px',
+          width: '100px',
+          height: '40px',
+          backgroundImage: `url('/img/diary/button.png')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
           cursor: 'pointer',
-          fontSize: '16px',
           zIndex: 1000,
           opacity: 0.8,
           transition: 'opacity 0.3s ease',
@@ -937,8 +937,8 @@ export default function Diary() {
         }}
         onMouseEnter={(e) => e.target.style.opacity = 1}
         onMouseLeave={(e) => e.target.style.opacity = 0.8}
+        title="保存日记"
       >
-        保存
       </div>
     </div>
   );
