@@ -1,0 +1,11 @@
+Model Information:
+* title:	小王子  Le Petit Prince
+* source:	https://sketchfab.com/3d-models/le-petit-prince-a373654d89894bb49e8df5b2ab6d4b7f
+* author:	小王子 (https://sketchfab.com/hong2695429209)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "小王子  Le Petit Prince" (https://sketchfab.com/3d-models/le-petit-prince-a373654d89894bb49e8df5b2ab6d4b7f) by 小王子 (https://sketchfab.com/hong2695429209) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

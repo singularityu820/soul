@@ -8,8 +8,8 @@ export default function RouteSwitcher({ routes, current, onNavigate }) {
         return "星空首页";
       // case "#/portal":
       //   return "星空入口";
-      // case "#/chatnew":
-      //   return "新对话";
+      case "#/chatnew":
+        return "新对话";
       case "#/portal-planb":
         return "星空入口(PlanB-3D)";
       default:

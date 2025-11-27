@@ -1,0 +1,11 @@
+Model Information:
+* title:	Red rose
+* source:	https://sketchfab.com/3d-models/red-rose-74520e87c3ed46898668c83356dd9cfa
+* author:	Lassi Kaukonen (https://sketchfab.com/thesidekick)
+
+Model License:
+* license type:	CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
+* requirements:	Author must be credited. Commercial use is allowed.
+
+If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
+This work is based on "Red rose" (https://sketchfab.com/3d-models/red-rose-74520e87c3ed46898668c83356dd9cfa) by Lassi Kaukonen (https://sketchfab.com/thesidekick) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)

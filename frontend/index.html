@@ -4,9 +4,17 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Emotion Agent Dashboard</title>
+    <!-- Live2D Cubism Core 必须在模块加载之前加载 -->
+    <script src="/live2dcubismcore.min.js"></script>
+    <script>
+      // 确保 Live2DCubismCore 在模块加载之前已经加载
+      if (typeof Live2DCubismCore === 'undefined') {
+        console.error('Live2DCubismCore 未加载！请检查 live2dcubismcore.min.js 是否正确加载。');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="./src/main.jsx"></script>
   </body>
 </html>
