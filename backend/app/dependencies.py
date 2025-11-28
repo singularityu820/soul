@@ -17,6 +17,7 @@ from .config import (
     TTSServiceConfig,
 )
 from .services.agent import AgentMemory, ConversationalAgent, LLMService, TTSService
+from .services.agent.text_chat_llm import TextChatLLMService
 from .services.agent.asr import ASRService
 from .services.chat.service import ChatService
 from .services.chat.storage import ChatStorage
@@ -89,7 +90,8 @@ pipeline = EmotionPipeline(
 )
 
 # Chat services
-chat_service = ChatService(agent=agent, pipeline=pipeline)
+text_chat_llm_service = TextChatLLMService()
+chat_service = ChatService(agent=agent, pipeline=pipeline, text_chat_llm=text_chat_llm_service)
 chat_storage = ChatStorage()
 
 # EEG waveform service

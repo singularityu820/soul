@@ -126,6 +126,30 @@ async def post_message(
     return message
 
 
+@router.post("/chat/threads/{thread_id}/text-messages", response_model=ChatMessage, status_code=201)
+async def post_text_message(
+    thread_id: str,
+    payload: ChatMessageIn,
+    username: str | None = Cookie(None),
+    chat: ChatService = Depends(get_chat_service),
+) -> ChatMessage:
+    """
+    独立文本聊天消息接口，不依赖情绪识别系统
+    """
+    thread = await chat.get_thread(thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    message = await chat.add_text_chat_message(thread_id, payload.text, payload.language)
+    
+    # 保存消息到数据库，使用特殊的用户名前缀区分文本聊天记录
+    # 这样在获取普通用户聊天记录时就不会包含文本聊天记录
+    text_chat_username = f"text_chat_{thread_id}"
+    storage = get_chat_storage()
+    storage.save_message(message, text_chat_username)
+    
+    return message
+
+
 @router.get("/chat/user/{username}/recent")
 async def get_recent_messages_for_user(
     username: str,

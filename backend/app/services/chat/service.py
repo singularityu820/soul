@@ -10,6 +10,7 @@ from typing import Dict, Iterable, List, Optional
 
 from ...schemas import AgentMessage, ChatEvent, ChatMessage, ChatThreadOut, EmotionState
 from ..agent import ConversationalAgent
+from ..agent.text_chat_llm import TextChatLLMService
 from ..emotion.pipeline import EmotionPipeline
 
 logger = logging.getLogger(__name__)
@@ -31,9 +32,11 @@ class ChatService:
         self,
         agent: ConversationalAgent,
         pipeline: EmotionPipeline,
+        text_chat_llm: Optional[TextChatLLMService] = None,
     ) -> None:
         self.agent = agent
         self.pipeline = pipeline
+        self.text_chat_llm = text_chat_llm or TextChatLLMService()
         self._threads: Dict[str, ThreadRecord] = {}
         self._messages: Dict[str, List[ChatMessage]] = {}
         self._listeners: set[asyncio.Queue[ChatEvent]] = set()
@@ -81,6 +84,27 @@ class ChatService:
         async with self._lock:
             messages = self._messages.get(thread_id, [])
             return messages[-limit:]
+
+    async def add_text_chat_message(self, thread_id: str, text: str, language: str) -> ChatMessage:
+        """添加文本聊天消息，使用独立LLM服务生成回复，不依赖情绪识别"""
+        logger.info(f"Text chat message received: thread={thread_id}, text='{text[:50]}...'")
+        
+        # 添加用户消息
+        message = await self._append_message(
+            thread_id=thread_id,
+            role="user",
+            text=text,
+            language=language,
+            emotion=None,
+            agent_message=None,
+        )
+        logger.debug(f"User message appended with id={message.message_id}")
+        
+        # 创建后台任务生成AI回复
+        asyncio.create_task(self._text_chat_follow_up(thread_id, text, language))
+        logger.info(f"Text chat follow-up task created for thread {thread_id}")
+        
+        return message
 
     async def add_user_message(self, thread_id: str, text: str, language: str) -> ChatMessage:
         logger.info(f"User message received: thread={thread_id}, text='{text[:50]}...'")
@@ -149,6 +173,42 @@ class ChatService:
         await self._broadcast(ChatEvent(thread_id=thread_id, message=message))
         return message
 
+    async def _text_chat_follow_up(self, thread_id: str, user_text: str, language: str) -> None:
+        """使用独立文本聊天LLM服务生成回复"""
+        try:
+            logger.info(f"Text chat follow-up started for thread {thread_id}")
+            
+            # 获取最近的对话历史（最近5条消息，不包括系统消息）
+            history = await self.history(thread_id, limit=5)
+            conversation_history = []
+            
+            # 转换历史消息为LLM服务所需的格式
+            for msg in history:
+                if msg.role == "user":
+                    conversation_history.append({"role": "user", "content": msg.text})
+                elif msg.role == "agent":
+                    conversation_history.append({"role": "assistant", "content": msg.text})
+            
+            # 使用独立LLM服务生成回复
+            response_text = await self.text_chat_llm.generate_response(user_text, conversation_history)
+            logger.info(f"Text chat LLM generated response: {response_text[:50]}...")
+            
+            # 创建AgentMessage对象
+            agent_message = self.text_chat_llm.create_agent_message(response_text)
+            
+            # 添加AI回复到消息列表
+            await self._append_message(
+                thread_id=thread_id,
+                role="agent",
+                text=agent_message.text,
+                language=agent_message.language,
+                emotion=None,
+                agent_message=agent_message,
+            )
+            logger.info(f"Text chat agent message appended to thread {thread_id}")
+        except Exception as e:
+            logger.exception(f"Text chat follow-up failed for thread {thread_id}: {e}")
+
     async def _agent_follow_up(
         self,
         thread_id: str,
@@ -180,8 +240,10 @@ class ChatService:
             # Swallow errors to avoid crashing background task, but log them
 
     async def _broadcast(self, event: ChatEvent) -> None:
+        logger.info(f"Broadcasting event: {event.thread_id}, type: {event.type}, listeners: {len(self._listeners)}")
         for queue in list(self._listeners):
             await queue.put(event)
+            logger.debug(f"Added event to queue: {event.thread_id}")
 
     def _to_thread_out(self, record: ThreadRecord) -> ChatThreadOut:
         return ChatThreadOut(

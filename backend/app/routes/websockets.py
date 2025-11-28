@@ -80,21 +80,28 @@ async def chat_stream(
 ) -> None:
     await websocket.accept()
     thread_id = websocket.query_params.get("thread_id")
+    logger.info(f"WebSocket chat connection established for thread_id: {thread_id}")
     queue = await chat.subscribe()
+    logger.info(f"Subscribed to chat service, queue size: {queue.qsize()}")
 
     try:
         if thread_id:
             history = await chat.history(thread_id)
+            logger.info(f"Found {len(history)} messages in history for thread {thread_id}")
             for message in history:
                 await websocket.send_json(
                     jsonable_encoder(ChatEvent(thread_id=thread_id, message=message))
                 )
+                logger.debug(f"Sent history message: {message.role} - {message.text[:30]}...")
 
         while True:
             event = await queue.get()
+            logger.debug(f"Received event from queue: {event.thread_id}, type: {event.type}")
             if thread_id and event.thread_id != thread_id:
+                logger.debug(f"Skipping event for different thread: {event.thread_id}")
                 continue
             await websocket.send_json(jsonable_encoder(event))
+            logger.debug(f"Sent event to WebSocket: {event.thread_id}")
     except WebSocketDisconnect:
         logger.debug("Chat websocket disconnected")
     except Exception:

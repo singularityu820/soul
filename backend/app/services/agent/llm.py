@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import AsyncIterator, Dict, Optional
 
 import httpx
 
@@ -25,6 +25,30 @@ class BaseLLMClient:
 
     async def generate(self, prompt: str, **kwargs: object) -> str:
         raise NotImplementedError
+    
+    async def generate_stream(self, prompt: str, **kwargs: object) -> AsyncIterator[str]:
+        """默认实现：调用generate方法，然后按chunk返回文本"""
+        full_text = await self.generate(prompt, **kwargs)
+        if not full_text:
+            return
+        
+        buffer = []
+        chunk_size = 80
+        break_chars = {"。", "！", "？", "!", "?", "；", ";", "\n"}
+        
+        for ch in full_text:
+            buffer.append(ch)
+            should_flush = ch in break_chars or len(buffer) >= chunk_size
+            if should_flush:
+                chunk = "".join(buffer).strip()
+                buffer.clear()
+                if chunk:
+                    yield chunk
+        
+        if buffer:
+            chunk = "".join(buffer).strip()
+            if chunk:
+                yield chunk
 
 
 class SandboxLLMClient(BaseLLMClient):
@@ -52,11 +76,31 @@ class RemoteLLMClient(BaseLLMClient):
     async def generate(self, prompt: str, **kwargs: object) -> str:
         if not self.api_key:
             return f"[{self.provider.value}] 未配置 API 密钥，使用占位回复。"
-        headers: Dict[str, str] = {"Authorization": f"Bearer {self.api_key}"}
+        
+        # Special handling for Doubao API
+        if self.provider == LLMProvider.DOUBAO:
+            headers: Dict[str, str] = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+        else:
+            headers: Dict[str, str] = {"Authorization": f"Bearer {self.api_key}"}
         
         # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
         default_model = os.getenv("LLM_MODEL_ID", "default")
+        
+        # For Doubao, use the specific model ID from env or kwargs
+        if self.provider == LLMProvider.DOUBAO:
+            default_model = os.getenv("DOUBAO_MODEL_ID", "doubao-seed-1-6-251015")
+        
         model = kwargs.get("model", default_model)
+        
+        # For Doubao API, use the model ID as endpoint
+        if self.provider == LLMProvider.DOUBAO:
+            # 根据豆包API文档，使用正确的端点
+            endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+        else:
+            endpoint = self.endpoint
         
         payload = {
             "model": model,
@@ -68,9 +112,29 @@ class RemoteLLMClient(BaseLLMClient):
                 ],
             ),
         }
+        
+        # For Doubao API, modify the payload format
+        if self.provider == LLMProvider.DOUBAO:
+            # 根据豆包API文档，调整请求体格式
+            payload = {
+                "model": model,
+                "messages": kwargs.get(
+                    "messages",
+                    [
+                        {"role": "system", "content": "You are a supportive companion."},
+                        {"role": "user", "content": prompt},
+                    ],
+                ),
+                "stream": False,
+            }
+        
+        # 添加调试信息
+        if self.provider == LLMProvider.DOUBAO:
+            logger.info(f"Doubao API Request - Endpoint: {endpoint}, Model: {model}")
+        
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
-                response = await client.post(self.endpoint, headers=headers, json=payload)
+                response = await client.post(endpoint, headers=headers, json=payload)
                 response.raise_for_status()
                 data = response.json()
                 content = (
@@ -84,6 +148,80 @@ class RemoteLLMClient(BaseLLMClient):
             logger.warning(f"LLM HTTP error: {e}")
             return f"[{self.provider.value}] 接口不可用，使用占位回复。"
         return f"[{self.provider.value}] 未返回内容。"
+    
+    async def generate_stream(self, prompt: str, **kwargs: object) -> AsyncIterator[str]:
+        """实现流式响应"""
+        if not self.api_key:
+            yield f"[{self.provider.value}] 未配置 API 密钥，使用占位回复。"
+            return
+        
+        # Special handling for Doubao API
+        if self.provider == LLMProvider.DOUBAO:
+            headers: Dict[str, str] = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json"
+            }
+        else:
+            headers: Dict[str, str] = {"Authorization": f"Bearer {self.api_key}"}
+        
+        # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
+        default_model = os.getenv("LLM_MODEL_ID", "default")
+        
+        # For Doubao, use the specific model ID from env or kwargs
+        if self.provider == LLMProvider.DOUBAO:
+            default_model = os.getenv("DOUBAO_MODEL_ID", "doubao-seed-1-6-251015")
+        
+        model = kwargs.get("model", default_model)
+        
+        # For Doubao API, use the model ID as endpoint
+        if self.provider == LLMProvider.DOUBAO:
+            # 根据豆包API文档，使用正确的端点
+            endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
+        else:
+            endpoint = self.endpoint
+        
+        payload = {
+            "model": model,
+            "messages": kwargs.get(
+                "messages",
+                [
+                    {"role": "system", "content": "You are a supportive companion."},
+                    {"role": "user", "content": prompt},
+                ],
+            ),
+            "stream": True,  # 启用流式响应
+        }
+        
+        # 添加调试信息
+        if self.provider == LLMProvider.DOUBAO:
+            logger.info(f"Doubao API Stream Request - Endpoint: {endpoint}, Model: {model}")
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream("POST", endpoint, headers=headers, json=payload) as response:
+                    response.raise_for_status()
+                    async for line in response.aiter_lines():
+                        if line.strip():
+                            if line.startswith("data: "):
+                                data_str = line[6:]  # 去掉 "data: " 前缀
+                                if data_str.strip() == "[DONE]":
+                                    break
+                                try:
+                                    import json
+                                    data = json.loads(data_str)
+                                    if "choices" in data and len(data["choices"]) > 0:
+                                        delta = data["choices"][0].get("delta", {})
+                                        if "content" in delta and delta["content"]:
+                                            yield delta["content"]
+                                except json.JSONDecodeError:
+                                    logger.warning(f"Failed to parse JSON from stream: {data_str}")
+                                    continue
+        except httpx.HTTPError as e:
+            logger.warning(f"LLM Stream HTTP error: {e}")
+            yield f"[{self.provider.value}] 流式接口不可用，使用占位回复。"
+        except Exception as e:
+            logger.warning(f"LLM Stream error: {e}")
+            yield f"[{self.provider.value}] 流式响应出错，使用占位回复。"
 
 
 class LLMService:
@@ -136,31 +274,20 @@ class LLMService:
         chunk_size: int = 80,
         **kwargs: object,
     ) -> AsyncIterator[str]:
-        """轻量级流式接口：在无原生流式API时按 chunk 依次返回文本"""
+        """流式接口：直接调用客户端的generate_stream方法"""
+        client = self.client()
+        logger.info(f"Generating stream response with LLM provider: {client.provider.value}")
+        
         gen_kwargs = dict(kwargs)
         if messages is not None:
             gen_kwargs["messages"] = messages
-
-        full_text = await self.generate(prompt, **gen_kwargs)
-        if not full_text:
-            return
-
-        buffer: list[str] = []
-        break_chars = {"。", "！", "？", "!", "?", "；", ";", "\n"}
-
-        for ch in full_text:
-            buffer.append(ch)
-            should_flush = ch in break_chars or len(buffer) >= chunk_size
-            if should_flush:
-                chunk = "".join(buffer).strip()
-                buffer.clear()
-                if chunk:
-                    yield chunk
-
-        if buffer:
-            chunk = "".join(buffer).strip()
-            if chunk:
+        
+        try:
+            async for chunk in client.generate_stream(prompt, **gen_kwargs):
                 yield chunk
+        except Exception as e:
+            logger.exception(f"LLM stream generation error: {e}")
+            yield f"[{client.provider.value}] 流式响应出错，使用占位回复。"
 
     def _detect(self) -> LLMDetectionResult:
         config = self.config
@@ -197,6 +324,7 @@ class LLMService:
             self._detect_openai,
             self._detect_modelscope,
             self._detect_zhipu,
+            self._detect_doubao,
             self._detect_vllm,
             self._detect_ollama,
         ]
@@ -233,6 +361,9 @@ class LLMService:
         if provider == LLMProvider.ZHIPU:
             endpoint = overrides.get(provider, "https://open.bigmodel.cn/api/paas/v4/chat/completions")
             return RemoteLLMClient(provider, endpoint, os.getenv("ZHIPUAI_API_KEY"), timeout)
+        if provider == LLMProvider.DOUBAO:
+            endpoint = overrides.get(provider, "https://ark.cn-beijing.volces.com/api/v3/chat/completions")
+            return RemoteLLMClient(provider, endpoint, os.getenv("DOUBAO_API_KEY"), timeout)
         if provider == LLMProvider.VLLM:
             endpoint = overrides.get(provider, os.getenv("VLLM_ENDPOINT", "http://127.0.0.1:8000/v1/chat/completions"))
             return RemoteLLMClient(provider, endpoint, os.getenv("VLLM_API_KEY"), timeout)
@@ -254,6 +385,11 @@ class LLMService:
     def _detect_zhipu(self) -> Optional[LLMDetectionResult]:
         if os.getenv("ZHIPUAI_API_KEY") or os.getenv("ZHIPUAI_API_SECRET"):
             return LLMDetectionResult(provider=LLMProvider.ZHIPU, reason="Found Zhipu credentials.")
+        return None
+
+    def _detect_doubao(self) -> Optional[LLMDetectionResult]:
+        if os.getenv("DOUBAO_API_KEY"):
+            return LLMDetectionResult(provider=LLMProvider.DOUBAO, reason="Found Doubao API key.")
         return None
 
     def _detect_vllm(self) -> Optional[LLMDetectionResult]:
