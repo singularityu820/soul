@@ -1574,7 +1574,7 @@ export default function StarPortalPlanB() {
               
               // 调整种植的玫瑰大小（比跟随鼠标的更大，使其更明显）
               // 跟随鼠标的玫瑰是 0.5，种植的玫瑰设置为 1.5 使其更明显
-              plantedRose.scale.set(3, 3, 3);
+              plantedRose.scale.set(6, 6, 6);
               plantedRose.position.copy(plantPosition);
               
               // 确保玫瑰可见

@@ -10,6 +10,7 @@ import { subscribeVoiceCall, getVoiceCallData } from "../../utils/voiceCallStore
 import { v4 as uuidv4 } from "uuid";
 import { resolveApiBaseUrl, resolveWebSocketUrl } from "../../utils/endpointResolver";
 import { safelyCloseWebSocket } from "../../utils/websocketHelpers";
+import ReactLive2d from "../../Live2D/src/index.jsx";
 
 const API_PREFIX = resolveApiBaseUrl();
 const PIPELINE_WS_OPTIONS = {
@@ -43,6 +44,7 @@ export default function ChatNew() {
   const [voiceTranscript, setVoiceTranscript] = useState(null);
   const [voiceResponse, setVoiceResponse] = useState(null);
   const messageIdsRef = useRef(new Set());
+  const live2dRef = useRef(null);
   
   // 入场动画
   useEffect(() => {
@@ -264,6 +266,11 @@ export default function ChatNew() {
         />
       </div>
       
+      <ReactLive2d
+        ref={live2dRef}
+        width="300"
+        height="500"
+      />
     </div>
   );
 }
