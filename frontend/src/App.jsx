@@ -3,6 +3,7 @@ import StarPortal from "./pages/StarPortal";
 import StarPortalPlanB from "./pages/StarPortalPlanB";
 import ChatApp from "./pages/ChatApp/ChatApp.jsx";
 import ChatNew from "./pages/ChatNew/index.jsx";
+import KawaiiChat from "./pages/KawaiiChat/KawaiiChat.jsx";
 import UserCenter from "./pages/UserCenter";
 import NotFound from "./pages/NotFound";
 import RouteSwitcher from "./components/RouteSwitcher.jsx";
@@ -20,6 +21,7 @@ export default function App() {
       // "#/portal": StarPortal,
       "#/portal-planb": StarPortalPlanB,
       "#/chatnew": ChatNew,
+      "#/kawaiichat": KawaiiChat,
       "#/user": UserCenter,
     }),
     []

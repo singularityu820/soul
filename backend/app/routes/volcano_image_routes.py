@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-火山方舟文生图API路由
+火山方舟文生图API路由 只生成图片
 """
 
 import base64

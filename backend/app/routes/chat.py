@@ -1,10 +1,11 @@
 """Chat-related routes."""
 
+import json
 import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 
 from ..dependencies import get_chat_service, get_chat_storage
 from ..schemas import ChatMessage, ChatMessageIn, ChatThreadCreateIn, ChatThreadOut
@@ -139,7 +140,7 @@ async def post_text_message(
     thread = await chat.get_thread(thread_id)
     if not thread:
         raise HTTPException(status_code=404, detail="Thread not found")
-    message = await chat.add_text_chat_message(thread_id, payload.text, payload.language)
+    message = await chat.add_user_message(thread_id, payload.text, payload.language, use_text_chat=True)
     
     # 保存消息到数据库，使用特殊的用户名前缀区分文本聊天记录
     # 这样在获取普通用户聊天记录时就不会包含文本聊天记录
@@ -148,6 +149,61 @@ async def post_text_message(
     storage.save_message(message, text_chat_username)
     
     return message
+
+
+@router.post("/chat/threads/{thread_id}/text-messages-stream")
+async def post_text_message_stream(
+    thread_id: str,
+    payload: ChatMessageIn,
+    username: str | None = Cookie(None),
+    chat: ChatService = Depends(get_chat_service),
+):
+    """
+    独立文本聊天消息流式响应接口，使用Server-Sent Events (SSE)格式
+    """
+    thread = await chat.get_thread(thread_id)
+    if not thread:
+        raise HTTPException(status_code=404, detail="Thread not found")
+    
+    # 直接调用_append_message添加用户消息，不触发_text_chat_follow_up函数
+    # 从_conversation_history获取历史消息时需要内存中的消息
+    user_message = await chat._append_message(
+        thread_id=thread_id,
+        role="user",
+        text=payload.text,
+        language=payload.language,
+        emotion=None,
+        agent_message=None,
+    )
+    
+    # 使用特殊的用户名前缀区分文本聊天记录
+    text_chat_username = f"text_chat_{thread_id}"
+    storage = get_chat_storage()
+    storage.save_message(user_message, text_chat_username)
+    
+    async def generate():
+        """生成SSE格式的流式响应"""
+        try:
+            # 流式生成AI回复
+            async for chunk in chat.stream_text_chat_response(thread_id, payload.text, payload.language):
+                # 发送每个文本块
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+            
+            # 发送完成事件
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+        except Exception as e:
+            # 发送错误事件
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+    
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # 禁用Nginx缓冲
+        }
+    )
 
 
 @router.get("/chat/user/{username}/recent")

@@ -77,45 +77,44 @@ class RemoteLLMClient(BaseLLMClient):
         if not self.api_key:
             return f"[{self.provider.value}] 未配置 API 密钥，使用占位回复。"
         
-        # Special handling for Doubao API
-        if self.provider == LLMProvider.DOUBAO:
-            headers: Dict[str, str] = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-        else:
-            headers: Dict[str, str] = {"Authorization": f"Bearer {self.api_key}"}
-        
-        # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
-        default_model = os.getenv("LLM_MODEL_ID", "default")
-        
-        # For Doubao, use the specific model ID from env or kwargs
-        if self.provider == LLMProvider.DOUBAO:
-            default_model = os.getenv("DOUBAO_MODEL_ID", "doubao-seed-1-6-251015")
-        
-        model = kwargs.get("model", default_model)
-        
-        # For Doubao API, use the model ID as endpoint
-        if self.provider == LLMProvider.DOUBAO:
-            # 根据豆包API文档，使用正确的端点
-            endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-        else:
-            endpoint = self.endpoint
-        
-        payload = {
-            "model": model,
-            "messages": kwargs.get(
-                "messages",
-                [
-                    {"role": "system", "content": "You are a supportive companion."},
-                    {"role": "user", "content": prompt},
-                ],
-            ),
+        headers: Dict[str, str] = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
         }
         
-        # For Doubao API, modify the payload format
-        if self.provider == LLMProvider.DOUBAO:
-            # 根据豆包API文档，调整请求体格式
+        # For Coze API, use the specific endpoint
+        if self.provider == LLMProvider.COZE:
+            endpoint = "https://api.coze.cn/v3/chat"
+            # Coze requires bot_id in payload
+            bot_id = os.getenv("COZE_BOT_ID", "7577955978616995903")
+            
+            # Get messages from kwargs or use default
+            messages = kwargs.get("messages", [
+                {"role": "user", "content": prompt},
+            ])
+            
+            # Convert to Coze API format with content_type
+            additional_messages = []
+            for msg in messages:
+                coze_msg = {
+                    "role": msg["role"],
+                    "content": msg["content"],
+                    "content_type": "text"
+                }
+                additional_messages.append(coze_msg)
+            
+            payload = {
+                "bot_id": bot_id,
+                "user_id": kwargs.get("user_id", "default_user"),
+                "additional_messages": additional_messages,
+                "stream": False,
+                "auto_save_history": True
+            }
+        else:
+            # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
+            default_model = os.getenv("LLM_MODEL_ID", "default")
+            model = kwargs.get("model", default_model)
+            
             payload = {
                 "model": model,
                 "messages": kwargs.get(
@@ -125,23 +124,56 @@ class RemoteLLMClient(BaseLLMClient):
                         {"role": "user", "content": prompt},
                     ],
                 ),
-                "stream": False,
             }
         
         # 添加调试信息
-        if self.provider == LLMProvider.DOUBAO:
-            logger.info(f"Doubao API Request - Endpoint: {endpoint}, Model: {model}")
+        if self.provider == LLMProvider.COZE:
+            logger.info(f"Coze API Request - Endpoint: {endpoint}, Bot ID: {bot_id}")
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 response = await client.post(endpoint, headers=headers, json=payload)
                 response.raise_for_status()
                 data = response.json()
-                content = (
-                    data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content")
-                )
+                
+                # Initialize content variable
+                content = None
+                
+                # Handle Coze API response format
+                if self.provider == LLMProvider.COZE:
+                    # Check if API returned an error
+                    if data.get("code") != 0:
+                        error_msg = data.get("msg", "Unknown error")
+                        logger.warning(f"Coze API error: {error_msg}")
+                        return f"[{self.provider.value}] API错误: {error_msg}"
+                    # Extract content from successful response
+                    # For non-streaming response, we get the complete message directly
+                    if "data" in data:
+                        # Check if it's a non-streaming response with chat_id
+                        if "chat_id" in data["data"]:
+                            # This is a non-streaming response, we need to poll for the result
+                            # For simplicity, we'll just return a placeholder for now
+                            return f"[{self.provider.value}] 非流式响应，需要轮询获取结果，chat_id: {data['data']['chat_id']}"
+                        # Check if it's a direct response with messages
+                        elif "messages" in data["data"]:
+                            # This is a complete response with all messages
+                            messages = data["data"]["messages"]
+                            if messages:
+                                last_message = messages[-1]
+                                if "content" in last_message:
+                                    return last_message["content"]
+                    # For streaming response (which we'll use primarily)
+                    elif "content" in data:
+                        # This is a streaming response chunk
+                        return data["content"]
+                else:
+                    # Handle other providers (including Doubao)
+                    content = (
+                        data.get("choices", [{}])[0]
+                        .get("message", {})
+                        .get("content")
+                    )
+                
                 if content:
                     return content
         except httpx.HTTPError as e:
@@ -155,67 +187,110 @@ class RemoteLLMClient(BaseLLMClient):
             yield f"[{self.provider.value}] 未配置 API 密钥，使用占位回复。"
             return
         
-        # Special handling for Doubao API
-        if self.provider == LLMProvider.DOUBAO:
-            headers: Dict[str, str] = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json"
-            }
-        else:
-            headers: Dict[str, str] = {"Authorization": f"Bearer {self.api_key}"}
-        
-        # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
-        default_model = os.getenv("LLM_MODEL_ID", "default")
-        
-        # For Doubao, use the specific model ID from env or kwargs
-        if self.provider == LLMProvider.DOUBAO:
-            default_model = os.getenv("DOUBAO_MODEL_ID", "doubao-seed-1-6-251015")
-        
-        model = kwargs.get("model", default_model)
-        
-        # For Doubao API, use the model ID as endpoint
-        if self.provider == LLMProvider.DOUBAO:
-            # 根据豆包API文档，使用正确的端点
-            endpoint = "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-        else:
-            endpoint = self.endpoint
-        
-        payload = {
-            "model": model,
-            "messages": kwargs.get(
-                "messages",
-                [
-                    {"role": "system", "content": "You are a supportive companion."},
-                    {"role": "user", "content": prompt},
-                ],
-            ),
-            "stream": True,  # 启用流式响应
+        headers: Dict[str, str] = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json"
         }
         
+        # For Coze API, use the specific endpoint
+        if self.provider == LLMProvider.COZE:
+            endpoint = "https://api.coze.cn/v3/chat"
+            # Coze requires bot_id in payload
+            bot_id = os.getenv("COZE_BOT_ID", "7577955978616995903")
+            
+            # Get messages from kwargs or use default
+            messages = kwargs.get("messages", [
+                {"role": "user", "content": prompt},
+            ])
+            
+            # Convert to Coze API format with content_type
+            additional_messages = []
+            for msg in messages:
+                coze_msg = {
+                    "role": msg["role"],
+                    "content": msg["content"],
+                    "content_type": "text"
+                }
+                additional_messages.append(coze_msg)
+            
+            payload = {
+                "bot_id": bot_id,
+                "user_id": kwargs.get("user_id", "default_user"),
+                "additional_messages": additional_messages,
+                "stream": True,  # 启用流式响应
+            }
+        else:
+            # Use LLM_MODEL_ID from env if available, otherwise use kwargs or default
+            default_model = os.getenv("LLM_MODEL_ID", "default")
+            model = kwargs.get("model", default_model)
+            endpoint = self.endpoint
+            
+            payload = {
+                "model": model,
+                "messages": kwargs.get(
+                    "messages",
+                    [
+                        {"role": "system", "content": "You are a supportive companion."},
+                        {"role": "user", "content": prompt},
+                    ],
+                ),
+                "stream": True,  # 启用流式响应
+            }
+        
         # 添加调试信息
-        if self.provider == LLMProvider.DOUBAO:
-            logger.info(f"Doubao API Stream Request - Endpoint: {endpoint}, Model: {model}")
+        if self.provider == LLMProvider.COZE:
+            logger.info(f"Coze API Stream Request - Endpoint: {endpoint}, Bot ID: {bot_id}")
         
         try:
             async with httpx.AsyncClient(timeout=self.timeout) as client:
                 async with client.stream("POST", endpoint, headers=headers, json=payload) as response:
                     response.raise_for_status()
-                    async for line in response.aiter_lines():
-                        if line.strip():
-                            if line.startswith("data: "):
-                                data_str = line[6:]  # 去掉 "data: " 前缀
-                                if data_str.strip() == "[DONE]":
-                                    break
-                                try:
-                                    import json
-                                    data = json.loads(data_str)
-                                    if "choices" in data and len(data["choices"]) > 0:
-                                        delta = data["choices"][0].get("delta", {})
-                                        if "content" in delta and delta["content"]:
-                                            yield delta["content"]
-                                except json.JSONDecodeError:
-                                    logger.warning(f"Failed to parse JSON from stream: {data_str}")
+                    
+                    # Coze stream handling
+                    if self.provider == LLMProvider.COZE:
+                        # Coze uses SSE format with event: conversation.message.delta
+                        async for line in response.aiter_lines():
+                            if line.strip():
+                                # Skip event type lines
+                                if line.startswith("event: "):
                                     continue
+                                elif line.startswith("data: "):
+                                    data_str = line[6:].strip()
+                                    if data_str == "[DONE]":
+                                        break
+                                    try:
+                                        import json
+                                        data = json.loads(data_str)
+                                        # Check if this is a delta event with content
+                                        if isinstance(data, dict):
+                                            # For event: conversation.message.delta
+                                            if "content" in data and data.get("role") == "assistant" and data.get("type") == "answer":
+                                                chunk = data["content"]
+                                                if chunk:
+                                                    yield chunk
+                                            # For event: conversation.message.completed
+                                            # This contains the full message, but we've already streamed all chunks
+                                    except json.JSONDecodeError:
+                                        logger.warning(f"Failed to parse JSON from Coze stream: {data_str}")
+                                        continue
+                    else:
+                        # Other providers (including Doubao) stream handling
+                        async for line in response.aiter_lines():
+                            if line.strip():
+                                if line.startswith("data: "):
+                                    data_str = line[6:]  # 去掉 "data: " 前缀
+                                    if data_str.strip() == "[DONE]":
+                                        break
+                                    try:
+                                        import json
+                                        data = json.loads(data_str)
+                                        if "choices" in data and len(data["choices"]) > 0:
+                                            delta = data["choices"][0].get("delta", {})
+                                            if "content" in delta and delta["content"]:
+                                                yield delta["content"]
+                                    except json.JSONDecodeError:
+                                        logger.warning(f"Failed to parse JSON from stream: {data_str}")
+                                        continue
         except httpx.HTTPError as e:
             logger.warning(f"LLM Stream HTTP error: {e}")
             yield f"[{self.provider.value}] 流式接口不可用，使用占位回复。"
@@ -324,7 +399,7 @@ class LLMService:
             self._detect_openai,
             self._detect_modelscope,
             self._detect_zhipu,
-            self._detect_doubao,
+            self._detect_coze,
             self._detect_vllm,
             self._detect_ollama,
         ]
@@ -361,9 +436,11 @@ class LLMService:
         if provider == LLMProvider.ZHIPU:
             endpoint = overrides.get(provider, "https://open.bigmodel.cn/api/paas/v4/chat/completions")
             return RemoteLLMClient(provider, endpoint, os.getenv("ZHIPUAI_API_KEY"), timeout)
-        if provider == LLMProvider.DOUBAO:
-            endpoint = overrides.get(provider, "https://ark.cn-beijing.volces.com/api/v3/chat/completions")
-            return RemoteLLMClient(provider, endpoint, os.getenv("DOUBAO_API_KEY"), timeout)
+        if provider == LLMProvider.COZE:
+            # Coze API configuration
+            endpoint = overrides.get(provider, "https://api.coze.cn/v3/chat")
+            api_key = os.getenv("COZE_API_KEY", "pat_iohHxuKegfTwBdPxQByEOv6LRxXbz5LBPgwN53GMvCFy7lA1rB6f7MxjxjekKLyp")
+            return RemoteLLMClient(provider, endpoint, api_key, timeout)
         if provider == LLMProvider.VLLM:
             endpoint = overrides.get(provider, os.getenv("VLLM_ENDPOINT", "http://127.0.0.1:8000/v1/chat/completions"))
             return RemoteLLMClient(provider, endpoint, os.getenv("VLLM_API_KEY"), timeout)
@@ -387,9 +464,9 @@ class LLMService:
             return LLMDetectionResult(provider=LLMProvider.ZHIPU, reason="Found Zhipu credentials.")
         return None
 
-    def _detect_doubao(self) -> Optional[LLMDetectionResult]:
-        if os.getenv("DOUBAO_API_KEY"):
-            return LLMDetectionResult(provider=LLMProvider.DOUBAO, reason="Found Doubao API key.")
+    def _detect_coze(self) -> Optional[LLMDetectionResult]:
+        if os.getenv("COZE_API_KEY"):
+            return LLMDetectionResult(provider=LLMProvider.COZE, reason="Found Coze API key.")
         return None
 
     def _detect_vllm(self) -> Optional[LLMDetectionResult]:

@@ -96,10 +96,12 @@ class ChatThreadCreateIn(BaseModel):
 
 
 class ChatEvent(BaseModel):
-    type: Literal["message", "deleted"] = "message"
+    type: Literal["message", "deleted", "stream_chunk"] = "message"
     thread_id: str
     message: Optional[ChatMessage] = None
     deleted: bool = False
+    stream_chunk: Optional[str] = None
+    stream_id: Optional[str] = None
 
 
 class FaceObservationIn(BaseModel):

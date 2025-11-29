@@ -91,8 +91,8 @@ pipeline = EmotionPipeline(
 
 # Chat services
 text_chat_llm_service = TextChatLLMService()
-chat_service = ChatService(agent=agent, pipeline=pipeline, text_chat_llm=text_chat_llm_service)
 chat_storage = ChatStorage()
+chat_service = ChatService(agent=agent, pipeline=pipeline, text_chat_llm=text_chat_llm_service, storage=chat_storage)
 
 # EEG waveform service
 eeg_waveform_service = EEGWaveformService()

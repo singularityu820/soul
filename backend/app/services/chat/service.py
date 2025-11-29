@@ -12,6 +12,7 @@ from ...schemas import AgentMessage, ChatEvent, ChatMessage, ChatThreadOut, Emot
 from ..agent import ConversationalAgent
 from ..agent.text_chat_llm import TextChatLLMService
 from ..emotion.pipeline import EmotionPipeline
+from .storage import ChatStorage
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +34,12 @@ class ChatService:
         agent: ConversationalAgent,
         pipeline: EmotionPipeline,
         text_chat_llm: Optional[TextChatLLMService] = None,
+        storage: Optional[ChatStorage] = None,
     ) -> None:
         self.agent = agent
         self.pipeline = pipeline
         self.text_chat_llm = text_chat_llm or TextChatLLMService()
+        self.storage = storage
         self._threads: Dict[str, ThreadRecord] = {}
         self._messages: Dict[str, List[ChatMessage]] = {}
         self._listeners: set[asyncio.Queue[ChatEvent]] = set()
@@ -55,6 +58,16 @@ class ChatService:
             )
             self._threads[thread_id] = record
             self._messages[thread_id] = []
+            
+            # 保存到数据库
+            if self.storage:
+                self.storage.save_thread(
+                    thread_id=thread_id,
+                    title=title,
+                    participants=list(participants),
+                    created_at=now,
+                    last_message_at=now,
+                )
         return self._to_thread_out(record)
 
     async def list_threads(self) -> List[ChatThreadOut]:
@@ -85,32 +98,23 @@ class ChatService:
             messages = self._messages.get(thread_id, [])
             return messages[-limit:]
 
-    async def add_text_chat_message(self, thread_id: str, text: str, language: str) -> ChatMessage:
-        """添加文本聊天消息，使用独立LLM服务生成回复，不依赖情绪识别"""
-        logger.info(f"Text chat message received: thread={thread_id}, text='{text[:50]}...'")
+    async def add_user_message(self, thread_id: str, text: str, language: str, use_text_chat: bool = False) -> ChatMessage:
+        """添加用户消息，根据use_text_chat参数选择是否使用独立文本聊天LLM服务
+        
+        Args:
+            thread_id: 对话线程ID
+            text: 用户消息文本
+            language: 消息语言
+            use_text_chat: 是否使用独立文本聊天LLM服务（不依赖情绪识别）
+        """
+        logger.info(f"{'Text chat' if use_text_chat else 'User'} message received: thread={thread_id}, text='{text[:50]}...'")
+        
+        # 对于普通聊天，获取情绪状态；对于文本聊天，不使用情绪识别
+        emotion = None if use_text_chat else self.pipeline.latest_state
+        if not use_text_chat:
+            logger.debug(f"Current emotion state: {emotion.label if emotion else 'None'}")
         
         # 添加用户消息
-        message = await self._append_message(
-            thread_id=thread_id,
-            role="user",
-            text=text,
-            language=language,
-            emotion=None,
-            agent_message=None,
-        )
-        logger.debug(f"User message appended with id={message.message_id}")
-        
-        # 创建后台任务生成AI回复
-        asyncio.create_task(self._text_chat_follow_up(thread_id, text, language))
-        logger.info(f"Text chat follow-up task created for thread {thread_id}")
-        
-        return message
-
-    async def add_user_message(self, thread_id: str, text: str, language: str) -> ChatMessage:
-        logger.info(f"User message received: thread={thread_id}, text='{text[:50]}...'")
-        emotion = self.pipeline.latest_state
-        logger.debug(f"Current emotion state: {emotion.label if emotion else 'None'}")
-        
         message = await self._append_message(
             thread_id=thread_id,
             role="user",
@@ -121,11 +125,17 @@ class ChatService:
         )
         logger.debug(f"User message appended with id={message.message_id}")
         
-        await self.agent.ingest_user_message(text)
-        logger.debug(f"User message ingested by agent")
-        
-        asyncio.create_task(self._agent_follow_up(thread_id, emotion, text))
-        logger.info(f"Agent follow-up task created for thread {thread_id}")
+        # 根据类型创建不同的后续处理任务
+        if use_text_chat:
+            # 使用独立文本聊天LLM服务
+            asyncio.create_task(self._text_chat_follow_up(thread_id, text, language))
+            logger.info(f"Text chat follow-up task created for thread {thread_id}")
+        else:
+            # 使用普通聊天流程
+            await self.agent.ingest_user_message(text)
+            logger.debug(f"User message ingested by agent")
+            asyncio.create_task(self._agent_follow_up(thread_id, emotion, text))
+            logger.info(f"Agent follow-up task created for thread {thread_id}")
         
         return message
 
@@ -170,31 +180,59 @@ class ChatService:
             self._messages[thread_id].append(message)
             record = self._threads[thread_id]
             record.last_message_at = created_at.timestamp()
+            
+            # 保存到数据库
+            if self.storage:
+                self.storage.save_message(message)
+                self.storage.update_thread_last_message(thread_id, created_at.timestamp())
         await self._broadcast(ChatEvent(thread_id=thread_id, message=message))
         return message
 
+    async def _get_conversation_history(self, thread_id: str, limit: int = 5) -> list[dict]:
+        """获取并转换对话历史为LLM服务所需的格式
+        
+        Args:
+            thread_id: 对话线程ID
+            limit: 历史消息数量限制
+        
+        Returns:
+            转换后的对话历史列表
+        """
+        history = await self.history(thread_id, limit=limit)
+        conversation_history = []
+        
+        # 转换历史消息为LLM服务所需的格式
+        for msg in history:
+            if msg.role == "user":
+                conversation_history.append({"role": "user", "content": msg.text})
+            elif msg.role == "agent":
+                conversation_history.append({"role": "assistant", "content": msg.text})
+        
+        return conversation_history
+
     async def _text_chat_follow_up(self, thread_id: str, user_text: str, language: str) -> None:
-        """使用独立文本聊天LLM服务生成回复"""
+        """使用独立文本聊天LLM服务生成流式回复"""
         try:
             logger.info(f"Text chat follow-up started for thread {thread_id}")
             
-            # 获取最近的对话历史（最近5条消息，不包括系统消息）
-            history = await self.history(thread_id, limit=5)
-            conversation_history = []
+            # 获取对话历史
+            conversation_history = await self._get_conversation_history(thread_id)
             
-            # 转换历史消息为LLM服务所需的格式
-            for msg in history:
-                if msg.role == "user":
-                    conversation_history.append({"role": "user", "content": msg.text})
-                elif msg.role == "agent":
-                    conversation_history.append({"role": "assistant", "content": msg.text})
-            
-            # 使用独立LLM服务生成回复
-            response_text = await self.text_chat_llm.generate_response(user_text, conversation_history)
-            logger.info(f"Text chat LLM generated response: {response_text[:50]}...")
+            # 使用独立LLM服务生成流式回复
+            full_response = ""
+            async for chunk in self.text_chat_llm.generate_response_stream(user_text, conversation_history):
+                if chunk:
+                    full_response += chunk
+                    # 广播流式消息块
+                    await self._broadcast(ChatEvent(
+                        type="stream_chunk",
+                        thread_id=thread_id,
+                        stream_chunk=chunk,
+                        stream_id=thread_id
+                    ))
             
             # 创建AgentMessage对象
-            agent_message = self.text_chat_llm.create_agent_message(response_text)
+            agent_message = self.text_chat_llm.create_agent_message(full_response)
             
             # 添加AI回复到消息列表
             await self._append_message(
@@ -208,6 +246,39 @@ class ChatService:
             logger.info(f"Text chat agent message appended to thread {thread_id}")
         except Exception as e:
             logger.exception(f"Text chat follow-up failed for thread {thread_id}: {e}")
+
+    async def stream_text_chat_response(self, thread_id: str, user_text: str, language: str):
+        """使用独立文本聊天LLM服务生成流式回复"""
+        try:
+            logger.info(f"Text chat stream response started for thread {thread_id}")
+            
+            # 获取对话历史
+            conversation_history = await self._get_conversation_history(thread_id)
+            
+            # 使用独立LLM服务生成流式回复
+            full_response = ""
+            async for chunk in self.text_chat_llm.generate_response_stream(user_text, conversation_history):
+                if chunk:
+                    full_response += chunk
+                    # 直接返回流式块
+                    yield chunk
+            
+            # 创建AgentMessage对象
+            agent_message = self.text_chat_llm.create_agent_message(full_response)
+            
+            # 添加AI回复到消息列表
+            await self._append_message(
+                thread_id=thread_id,
+                role="agent",
+                text=agent_message.text,
+                language=agent_message.language,
+                emotion=None,
+                agent_message=agent_message,
+            )
+            logger.info(f"Text chat agent message appended to thread {thread_id}")
+        except Exception as e:
+            logger.exception(f"Text chat stream response failed for thread {thread_id}: {e}")
+            yield f"[错误] 生成回复时出错: {str(e)}"
 
     async def _agent_follow_up(
         self,

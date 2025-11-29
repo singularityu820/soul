@@ -66,7 +66,7 @@ class LLMProvider(str, Enum):
     ZHIPU = "zhipu"
     VLLM = "vllm"
     OLLAMA = "ollama"
-    DOUBAO = "doubao"
+    COZE = "coze"
     SANDBOX = "sandbox"
 
 

@@ -19,6 +19,7 @@ const KawaiiChat = () => {
   
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
+  const currentThreadRef = useRef(null); // 用于跟踪当前连接的thread_id
 
   // 自动滚动到底部
   useEffect(() => {
@@ -29,26 +30,56 @@ const KawaiiChat = () => {
   // [辅助函数] 连接 WebSocket
   // ==========================================
   const connectWebSocket = (tid) => {
+    // 如果当前已经连接到相同的thread_id，无需重新连接
+    if (currentThreadRef.current === tid && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      console.log(`✅ 已连接到会话 ${tid}，无需重新连接`);
+      return;
+    }
+    
+    console.log(`🔌 准备连接到会话: ${tid}，当前连接的是: ${currentThreadRef.current}`);
+    
     // 如果有旧连接，先关闭
     if (wsRef.current) {
-        wsRef.current.close();
+      console.log(`🔌 关闭旧的WebSocket连接: ${currentThreadRef.current}`);
+      wsRef.current.close();
+      wsRef.current = null;
     }
 
     const ws = new WebSocket(`ws://localhost:8000/ws/chat?thread_id=${tid}`);
     
-    ws.onopen = () => console.log(`✅ WebSocket 已连接到会话: ${tid}`);
+    ws.onopen = () => {
+      console.log(`✅ WebSocket 已连接到会话: ${tid}`);
+      currentThreadRef.current = tid; // 更新当前连接的thread_id
+    };
     
     ws.onmessage = (event) => {
-      const response = JSON.parse(event.data);
-      const msgData = response.message;
-
-      // 收到后端推送的 AI 消息
-      if (msgData.role === 'agent') {
-        setMessages(prev => [...prev, {
-          id: msgData.message_id,
-          type: 'fox',
-          text: msgData.text
-        }]);
+      try {
+        const response = JSON.parse(event.data);
+        
+        // 只处理系统通知消息，避免与fetch流式响应重复
+        if (response.type === 'message' && response.message) {
+          const msgData = response.message;
+          // 只处理system角色的消息，忽略user和agent角色的消息
+          if (msgData.role === 'system') {
+            setMessages(prev => [...prev, {
+              id: msgData.message_id,
+              type: 'system',
+              text: msgData.text
+            }]);
+          }
+        }
+        // 忽略stream_chunk类型的消息，避免与fetch流式响应重复
+      } catch (error) {
+        console.error('处理WebSocket消息错误:', error, '原始数据:', event.data);
+      }
+    };
+    
+    ws.onclose = () => {
+      console.log(`🔌 WebSocket 连接已关闭: ${tid}`);
+      // 只有当关闭的是当前活跃的连接时，才更新currentThreadRef
+      if (currentThreadRef.current === tid) {
+        currentThreadRef.current = null;
+        wsRef.current = null;
       }
     };
 
@@ -146,19 +177,181 @@ const KawaiiChat = () => {
 
     const textToSend = inputValue;
     
-    // 乐观更新
-    const tempId = Date.now();
-    setMessages(prev => [...prev, { id: tempId, type: 'user', text: textToSend }]);
+    // 乐观更新 - 添加带有临时标记的用户消息
+    const tempId = `temp-${Date.now()}`;
+    setMessages(prev => [...prev, { 
+      id: tempId, 
+      type: 'user', 
+      text: textToSend,
+      isTemp: true // 添加临时标记
+    }]);
     setInputValue('');
 
     try {
-      await fetch(`http://localhost:8000/chat/threads/${threadId}/text-messages`, {
+      // 使用流式接口发送消息
+      const response = await fetch(`http://localhost:8000/chat/threads/${threadId}/text-messages-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textToSend })
       });
+
+      if (!response.ok) {
+        throw new Error(`发送失败: ${response.status}`);
+      }
+
+      // 处理流式响应
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let aiMessageId = null;
+      let aiMessageText = '';
+      let isFirstChunk = true;
+      let lastProcessedContent = ''; // 记录上一次处理的内容，用于去重
+
+      // 处理流式数据
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) {
+          // 确保处理完缓冲区中剩余的数据
+          if (buffer) {
+            const events = buffer.split('\n\n');
+            for (const event of events) {
+              if (event) {
+                processEvent(event);
+              }
+            }
+          }
+          break;
+        }
+        
+        buffer += decoder.decode(value, { stream: true });
+        
+        // 按SSE事件分隔符处理数据
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
+        
+        for (const event of events) {
+          if (event) {
+            processEvent(event);
+          }
+        }
+      }
+
+      // 处理单个SSE事件
+      function processEvent(event) {
+        if (!event.startsWith('data: ')) return;
+        
+        const dataStr = event.slice(6).trim();
+        if (!dataStr) return;
+        
+        if (dataStr === '[DONE]') return;
+        
+        try {
+          const data = JSON.parse(dataStr);
+          
+          // 处理流式消息块 - 智能累加，避免重复
+          if (data.type === 'chunk' && data.content) {
+            // 去重处理：如果当前内容和上一次完全相同，跳过
+            if (data.content === lastProcessedContent) {
+              return;
+            }
+            
+            // 智能累加逻辑：
+            // 1. 如果当前内容是之前内容的延续（更长且包含之前的内容），直接使用当前内容
+            // 2. 如果是全新的内容，累加
+            if (data.content.includes(aiMessageText) && data.content.length > aiMessageText.length) {
+              // 当前内容是之前内容的延续，直接替换（处理后端返回完整内容的情况）
+              aiMessageText = data.content;
+            } else {
+              // 检查是否有重叠内容，只添加新增部分
+              const overlapIndex = data.content.indexOf(aiMessageText);
+              if (overlapIndex === 0) {
+                // 当前内容是之前内容的延续，只添加新增部分
+                const newContent = data.content.slice(aiMessageText.length);
+                aiMessageText += newContent;
+              } else if (!data.content.includes(lastProcessedContent) || data.content.length > lastProcessedContent.length) {
+                // 新的内容片段，累加
+                aiMessageText += data.content;
+              }
+            }
+            
+            // 更新最后处理的内容
+            lastProcessedContent = data.content;
+            
+            if (isFirstChunk) {
+              // 第一次收到数据，添加AI消息
+              aiMessageId = Date.now();
+              setMessages(prev => [...prev, { 
+                id: aiMessageId, 
+                type: 'fox', 
+                text: aiMessageText,
+                isTyping: true // 显示正在输入状态
+              }]);
+              isFirstChunk = false;
+            } else {
+              // 更新现有消息
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === aiMessageId) {
+                  return { ...msg, text: aiMessageText, isTyping: true };
+                }
+                return msg;
+              }));
+            }
+          }
+          // 处理完整消息 - 直接显示全部内容
+          else if (data.type === 'full_message' && data.content) {
+            // 去重处理：如果当前内容和上一次相同，跳过
+            if (data.content === lastProcessedContent) {
+              return;
+            }
+            
+            // 更新最后处理的内容
+            lastProcessedContent = data.content;
+            
+            // 使用完整消息内容替换当前显示
+            aiMessageText = data.content;
+            
+            if (isFirstChunk) {
+              // 第一次收到数据，添加AI消息
+              aiMessageId = Date.now();
+              setMessages(prev => [...prev, { 
+                id: aiMessageId, 
+                type: 'fox', 
+                text: aiMessageText,
+                isTyping: false
+              }]);
+              isFirstChunk = false;
+            } else {
+              // 更新现有消息，直接显示完整内容
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === aiMessageId) {
+                  return { ...msg, text: aiMessageText, isTyping: false };
+                }
+                return msg;
+              }));
+            }
+          }
+          // 处理完成事件，确保消息显示完整
+          else if (data.type === 'done') {
+            if (aiMessageId) {
+              // 确保最终消息状态正确
+              setMessages(prev => prev.map(msg => {
+                if (msg.id === aiMessageId) {
+                  return { ...msg, isTyping: false };
+                }
+                return msg;
+              }));
+            }
+          }
+        } catch (e) {
+          console.error('解析流式数据错误:', e, '原始数据:', dataStr);
+        }
+      }
     } catch (error) {
       console.error("发送失败:", error);
+      // 移除临时用户消息
+      setMessages(prev => prev.filter(msg => !msg.isTemp));
+      // 添加错误消息
       setMessages(prev => [...prev, { id: Date.now(), type: 'fox', text: '消息发送失败了...' }]);
     }
   };
@@ -195,7 +388,7 @@ const KawaiiChat = () => {
                   color: msg.type === 'user' ? '#8b5e3c' : '#a67c52' 
                 }}
               >
-                <p className="message-text">{msg.text}</p>
+                <p className="message-text">{msg.text}{msg.isTyping && <span className="typing-indicator">...</span>}</p>
               </div>
             </div>
           ))}

@@ -85,12 +85,28 @@ async def chat_stream(
     logger.info(f"Subscribed to chat service, queue size: {queue.qsize()}")
 
     try:
+        # 发送连接确认消息，包含WebSocket连接标识
+        await websocket.send_json({
+            "type": "connection_established",
+            "source": "websocket",
+            "thread_id": thread_id,
+            "timestamp": datetime.utcnow().isoformat()
+        })
+        
         if thread_id:
             history = await chat.history(thread_id)
             logger.info(f"Found {len(history)} messages in history for thread {thread_id}")
             for message in history:
+                # 只发送非stream_chunk类型的消息，避免与HTTP流式响应冲突
+                if hasattr(message, 'type') and message.type == "stream_chunk":
+                    continue
+                    
                 await websocket.send_json(
-                    jsonable_encoder(ChatEvent(thread_id=thread_id, message=message))
+                    jsonable_encoder(ChatEvent(
+                        thread_id=thread_id, 
+                        message=message,
+                        source="websocket"  # 添加来源标识
+                    ))
                 )
                 logger.debug(f"Sent history message: {message.role} - {message.text[:30]}...")
 
@@ -100,6 +116,16 @@ async def chat_stream(
             if thread_id and event.thread_id != thread_id:
                 logger.debug(f"Skipping event for different thread: {event.thread_id}")
                 continue
+                
+            # 跳过stream_chunk类型的事件，这些应该通过HTTP流式响应处理
+            if hasattr(event, 'type') and event.type == "stream_chunk":
+                logger.debug(f"Skipping stream_chunk event to avoid conflict with HTTP streaming")
+                continue
+                
+            # 添加WebSocket来源标识，帮助前端区分消息来源
+            if hasattr(event, 'message'):
+                event.source = "websocket"
+            
             await websocket.send_json(jsonable_encoder(event))
             logger.debug(f"Sent event to WebSocket: {event.thread_id}")
     except WebSocketDisconnect:
@@ -515,3 +541,4 @@ async def voice_stream_websocket(
             await websocket.close()
         except:
             pass
+
