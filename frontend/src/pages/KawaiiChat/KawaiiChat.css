@@ -1,0 +1,210 @@
+/* 确保容器占满全屏 */
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: "Microsoft YaHei", "Heiti SC", sans-serif;
+}
+
+/* 1. APP 主容器 */
+.kawaii-app-container {
+  width: 100vw;
+  height: 100vh;
+  background-size: cover; /* 保证 2560x1600 图片铺满 */
+  background-position: center;
+  background-repeat: no-repeat;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* 2. 顶部导航 */
+.kawaii-header {
+  height: 80px; /* 加高一点适配大屏 */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 30px;
+  /* 稍微加一点磨砂玻璃效果，增加高级感 */
+  background: rgba(255, 255, 255, 0.1); 
+  backdrop-filter: blur(4px);
+  z-index: 10;
+}
+
+.header-title {
+  font-size: 24px; /* 字体加大 */
+  font-weight: bold;
+  color: #fff; 
+  text-shadow: 0px 2px 4px rgba(0,0,0,0.2);
+  letter-spacing: 2px;
+}
+
+.icon-call {
+  width: 32px; /* 图标加大 */
+  height: 32px;
+  margin-right: 20px;
+  filter: brightness(100); /* 确保这是白色或者原本的颜色 */
+  cursor: pointer;
+}
+
+.icon-more {
+  font-size: 30px;
+  color: #fff;
+  cursor: pointer;
+}
+
+.avatar-icon {
+  font-size: 28px;
+  cursor: pointer;
+}
+
+/* 3. 中间聊天区 */
+.kawaii-main {
+  flex: 1;
+  position: relative;
+  padding: 30px;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto; /* 允许聊天记录滚动 */
+  scrollbar-width: none; /* Firefox 隐藏滚动条 */
+}
+
+/* 隐藏 Chrome/Safari 滚动条 */
+.kawaii-main::-webkit-scrollbar {
+  display: none;
+}
+
+/* 中间的大狐狸装饰 */
+.center-decoration {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 400px; /* 大屏下装饰图可以大一点 */
+  height: 400px;
+  opacity: 0.85;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+}
+
+.center-decoration img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* 消息列表 */
+.message-list {
+  z-index: 1; 
+  display: flex;
+  flex-direction: column;
+  gap: 30px; /* 增加气泡间距 */
+  margin-top: 20px;
+}
+
+.message-row {
+  display: flex;
+  align-items: flex-end; /* 底部对齐，头像在下方 */
+  max-width: 70%; /* 限制单行消息最大宽度 */
+}
+
+.row-left {
+  align-self: flex-start;
+}
+
+.row-right {
+  align-self: flex-end;
+  flex-direction: row-reverse; 
+}
+
+.chat-avatar {
+  width: 60px; /* 头像加大 */
+  height: 60px;
+  background: rgba(255,255,255,0.9);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 15px;
+  font-size: 30px;
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+/* 气泡样式核心 */
+.bubble-container {
+  background-size: 100% 100%; 
+  background-repeat: no-repeat;
+  padding: 20px 40px; /* 增加内边距适配大图 */
+  min-height: 70px;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  font-size: 18px; /* 聊天字体加大 */
+  line-height: 1.5;
+  filter: drop-shadow(0 4px 6px rgba(0,0,0,0.05)); /* 给气泡加点淡淡的投影 */
+}
+
+/* 针对不同气泡的微调 - 避免文字压住气泡的小尖角 */
+.row-left .bubble-container {
+  padding-left: 45px; 
+}
+
+.row-right .bubble-container {
+  padding-right: 45px;
+}
+
+/* 4. 底部输入区 */
+.kawaii-footer {
+  height: 120px; /* 加高底部区域 */
+  display: flex;
+  align-items: center;
+  padding: 0 40px;
+  padding-bottom: 30px;
+}
+
+.input-wrapper {
+  flex: 1;
+  height: 70px; /* 输入框高度加大 */
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  display: flex;
+  align-items: center;
+  padding: 0 30px;
+  margin-right: 20px;
+  transition: transform 0.2s;
+}
+
+.input-wrapper:focus-within {
+  transform: scale(1.01); /* 输入时轻微放大特效 */
+}
+
+.custom-input {
+  width: 100%;
+  border: none;
+  background: transparent;
+  outline: none;
+  color: #8b5e3c;
+  font-size: 20px; /* 输入字体加大 */
+  font-weight: 500;
+}
+
+.custom-input::placeholder {
+  color: #dccab6;
+}
+
+.send-btn-wrapper img {
+  height: 70px; /* 按钮高度与输入框一致 */
+  width: auto;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.send-btn-wrapper img:active {
+  transform: scale(0.95);
+}
