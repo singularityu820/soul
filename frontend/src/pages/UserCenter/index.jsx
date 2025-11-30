@@ -495,7 +495,7 @@ export default function UserCenter() {
       
       {/* 日记毛玻璃框 - 显示最近聊天记录 */}
       <div className="riji-glass-frame" onClick={handleChatHistoryClick} style={{ cursor: 'pointer' }}>
-        <div className="chat-history-title">与小王子的通话记录</div>
+        <div className="chat-history-title">脑科小专家：小狐狸星屿</div>
         {recentMessages.length > 0 ? (
           recentMessages.map((message) => (
             <div key={message.id} className="history-item">
@@ -528,3 +528,4 @@ export default function UserCenter() {
     </div>
   );
 }
+

@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>第二个页面 - LetPrLogin</title>
     <style>
+      @font-face {
+        font-family: '萌趣甜心体';
+        src: url('./src/assets/ttf/萌趣甜心体.ttf');
+        font-weight: normal;
+        font-style: normal;
+      }
+      
       body {
-        font-family: Arial, sans-serif;
+        font-family: '萌趣甜心体', Arial, sans-serif;
         background: url('./img/backgroundUser.jpg') center center / cover no-repeat;
         background-attachment: fixed;
         min-height: 100vh;
@@ -16,6 +23,12 @@
         padding: 1rem;
         overflow-x: hidden;
       }
+      
+      /* 确保所有文本元素继承字体 */
+      body * {
+        font-family: inherit;
+      }
+      
       /* 头像样式 */
       .avatar-container {
         position: absolute;

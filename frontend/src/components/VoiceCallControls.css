@@ -11,6 +11,14 @@
   backdrop-filter: blur(6px);
   /* 半透明边框，保持轻量视觉分隔 */
   border: 3px solid rgba(255, 255, 255, 0.12);
+  /* 修改属性：从页面中间延伸到右侧 */
+  width: 100%;
+  position: relative;
+  box-sizing: border-box;
+  /* 确保从中间开始显示时，左侧边框不明显 */
+  border-left: none;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
 }
 
 /* 状态显示区域 */

@@ -1034,7 +1034,7 @@ export default function Diary() {
                       outline: 'none',
                       cursor: 'text',
                       color: '#333',
-                      fontFamily: 'Arial, sans-serif',
+                      fontFamily: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif',
                       lineHeight: '1.5',
                       whiteSpace: 'pre-wrap',
                       wordWrap: 'break-word'

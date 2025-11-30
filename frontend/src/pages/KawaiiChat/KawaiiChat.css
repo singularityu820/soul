@@ -1,7 +1,7 @@
 /* 引入自定义字体 */
 @font-face {
   font-family: "萌趣甜心体";
-  src: url("E:\ReactProject\dv3\soul-main\frontend\src\assets\ttf\萌趣甜心体.ttf");
+  src: url("../../assets/ttf/萌趣甜心体.ttf");
   font-weight: normal;
   font-style: normal;
 }
@@ -13,6 +13,18 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+/* 为所有元素设置字体 */
+* {
   font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
 }
 

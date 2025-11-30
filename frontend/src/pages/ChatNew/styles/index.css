@@ -1,4 +1,12 @@
+@font-face {
+  font-family: "萌趣甜心体";
+  src: url("../../../assets/ttf/萌趣甜心体.ttf");
+  font-weight: normal;
+  font-style: normal;
+}
+
 .chatnew-root {
+  font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
   position: relative;
   width: 100vw;
   height: 100dvh;
@@ -8,205 +16,9 @@
   box-sizing: border-box;
 }
 
-/* 右上角脑电波面板 */
-.chatnew-eeg-panel {
-  position: absolute;
-  top: 85px;
-  right: 40px;
-  width: 200px;
-  /* 透明化面板：仅保留波形 */
-  background: transparent;
-  border-radius: 0;
-  padding: 0;
-  backdrop-filter: none;
-  box-shadow: none;
-  z-index: 10;
-  transition: all 0.2s ease;
-  pointer-events: none; /* 不拦截交互 */
-}
-
-/* 迷你状态圆点（显示在面板右上角） */
-.chatnew-eeg-panel .eeg-mini-dot {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  box-shadow: 0 0 6px rgba(0,0,0,0.6);
-  z-index: 12;
-  pointer-events: none;
-  transition: background-color 0.2s ease, transform 0.2s ease;
-}
-
-/* 连接时微弱的呼吸动画 */
-@keyframes eegMiniPulse {
-  0% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.2); opacity: 0.85; }
-  100% { transform: scale(1); opacity: 1; }
-}
-.chatnew-eeg-panel .eeg-mini-dot.connected {
-  animation: eegMiniPulse 1.6s ease-in-out infinite;
-}
-
-.eeg-panel-header {
-  display: none; /* 隐藏面板头部，仅显示波形 */
-}
-
-.eeg-panel-header h3 {
-  color: #fff;
-  font-size: 16px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.eeg-panel-controls { display: none; }
-.eeg-mode-toggle, .eeg-panel-toggle { display: none; }
-
-.eeg-control-panel-container { display: none; }
-
-.eeg-waveform-display {
-  width: 100%;
-  height: 140px; /* 紧凑，仅显示波形 */
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-
-.eeg-waveform-empty {
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.9rem;
-  text-align: center;
-}
-
-/* 透明背景的波形容器样式 */
-.eeg-waveform-display .waveform-container--transparent {
-  width: 100%;
-  height: 100%;
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.eeg-waveform-display .waveform-container--transparent .waveform-chart {
-  width: 100%;
-  height: 100%;
-}
-
-.eeg-waveform-display .waveform-container--transparent .waveform-canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
-
-.eeg-device-status {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 6px;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-/* 在 ChatNew 面板中隐藏设备状态，仅显示波形 */
-.chatnew-eeg-panel .eeg-device-status { display: none !important; }
-
-.eeg-device-status.connected {
-  background: rgba(76, 175, 80, 0.2);
-  color: rgba(76, 175, 80, 0.9);
-}
-
-.eeg-device-status.connecting {
-  background: rgba(255, 193, 7, 0.2);
-  color: rgba(255, 193, 7, 0.9);
-}
-
-.eeg-device-status.error {
-  background: rgba(244, 67, 54, 0.2);
-  color: rgba(244, 67, 54, 0.9);
-}
-
-.eeg-status-indicator {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background-color: currentColor;
-}
-
-/* 响应式调整 */
-@media (max-width: 768px) {
-  .chatnew-eeg-panel {
-    width: calc(100% - 40px);
-    right: 20px;
-    left: 20px;
-  }
-}
-
-.chatnew-root.is-entering {
-  opacity: 0;
-  animation: chatNewEnter 1.5s ease-out forwards;
-}
-
-.chatnew-root.is-transitioning {
-  animation: chatNewExit 1.5s ease-in forwards;
-}
-
-.chatnew-root.is-transitioning .chatnew-content {
-  animation: contentFadeOut 1.5s ease-in forwards;
-}
-
-@keyframes chatNewEnter {
-  0% {
-    opacity: 0;
-    transform: scale(1.05) translateY(20px);
-    filter: blur(8px) brightness(0.8);
-  }
-  30% {
-    opacity: 0.3;
-    transform: scale(1.02) translateY(10px);
-    filter: blur(4px) brightness(0.9);
-  }
-  60% {
-    opacity: 0.7;
-    transform: scale(1.01) translateY(5px);
-    filter: blur(2px) brightness(0.95);
-  }
-  100% {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-    filter: blur(0) brightness(1);
-  }
-}
-
-@keyframes chatNewExit {
-  0% {
-    opacity: 1;
-    filter: brightness(1);
-  }
-  50% {
-    opacity: 0.3;
-    filter: brightness(0.3);
-  }
-  100% {
-    opacity: 0;
-    filter: brightness(0);
-  }
-}
-
-@keyframes contentFadeOut {
-  0% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(0.95);
-  }
+/* 为所有文本元素设置字体 */
+.chatnew-root * {
+  font-family: inherit;
 }
 
 .chatnew-background {
@@ -216,542 +28,253 @@
   background-position: center;
   background-repeat: no-repeat;
   z-index: 0;
-  filter: brightness(0.85);
+  filter: brightness(0.6); /* 稍微调暗背景以突出卡片 */
 }
 
-.chatnew-content {
-  position: relative;
+/* =========================================
+   核心布局容器 (新)
+   ========================================= */
+.chatnew-layout-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  /* 底部留出 100px 给控制按钮 */
+  padding: 40px 40px 100px 40px; 
+  gap: 24px;
+  box-sizing: border-box;
   z-index: 1;
+  position: relative;
+}
+
+/* 左侧列 (视频 + EEG) */
+.chatnew-column-left {
+  flex: 0 0 38%; /* 约占 40% 宽度 */
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
+  gap: 24px;
   height: 100%;
-  padding: 20px 20px 20px 0;
-  gap: 20px;
-  box-sizing: border-box;
+  min-width: 320px;
+}
+
+/* 右侧列 (角色 + 字幕) */
+.chatnew-column-right {
   flex: 1;
-  min-height: 0; /* 允许 flex 子元素缩小 */
-}
-
-/* 左侧视频通话区域 */
-.chatnew-video-container {
-  width: 58%;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 55px 20px 10px 0; /* 缩小下边距从 20px 到 10px */
-  box-sizing: border-box;
-  height: 100%; /* 确保容器高度固定 */
-}
-
-.chatnew-video-frame {
-  width: 100%;
-  height: 75%; /* 相对于父容器的高度 */
-  max-height: 73vh; /* 限制最大高度，避免受底部按钮影响 */
-  background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
-  border-radius: 0 40px 40px 0;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-left: none;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-  /* 确保按钮下滑时不会超出视频区域 */
-  clip-path: inset(0);
-}
-
-/* 视频接通时的样式 */
-.chatnew-video-frame.has-video-stream {
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(0);
-  padding: 0;
-}
-
-/* ChatWindow组件在ChatNew中的样式 */
-.chatnew-chatwindow-wrapper {
-  width: 100%;
   height: 100%;
   position: relative;
-  overflow: hidden;
-}
-
-.chatnew-chatwindow-wrapper .chat-window {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: transparent;
-  border: none;
-  padding: 0;
-}
-
-.chatnew-chatwindow-wrapper .chat-window__header {
-  display: none; /* 隐藏头部，因为我们有自己的布局 */
-}
-
-.chatnew-chatwindow-wrapper .emotion-detection-container {
-  display: none; /* 隐藏情绪检测区域 */
-}
-
-.chatnew-chatwindow-wrapper .video-container {
-  width: 100% !important;
-  height: 100% !important;
-  margin: 0 !important;
-  border-radius: 0 40px 40px 0 !important;
-  overflow: hidden !important;
-  padding: 0 !important;
-}
-
-.chatnew-chatwindow-wrapper .video-grid {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-}
-
-.chatnew-chatwindow-wrapper .video-item {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  border-radius: 0 40px 40px 0;
-  overflow: hidden;
-}
-
-.chatnew-chatwindow-wrapper .video-item h3 {
-  display: none; /* 隐藏"你"和"对方"标题 */
-}
-
-.chatnew-chatwindow-wrapper .video-item .video-container {
-  width: 100% !important;
-  height: 100% !important;
-  margin: 0 !important;
-  border-radius: 0 40px 40px 0 !important;
-  padding: 0 !important;
-}
-
-.chatnew-chatwindow-wrapper .video-item .video-element {
-  width: 100% !important;
-  height: 100% !important;
-  border-radius: 0 40px 40px 0 !important;
-  object-fit: cover !important;
-  display: block !important;
-}
-
-.chatnew-chatwindow-wrapper .message-list,
-.chatnew-chatwindow-wrapper .message-composer {
-  display: none; /* 隐藏消息列表和输入框 */
-}
-
-/* 视频占位预览 - 模拟手机屏幕的视觉中心 */
-.chatnew-video-placeholder {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  width: 100%;
-  height: 100%;
-  color: rgba(255, 255, 255, 0.7);
-  /* 向左偏移，模拟手机屏幕的视觉中心（手机显示四分之三，需要偏移到视觉中心） */
-  transform: translateX(-8%);
-}
-
-.chatnew-video-placeholder-icon {
-  width: 80px;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 50%;
-  backdrop-filter: blur(5px);
-  animation: placeholderPulse 2s ease-in-out infinite;
-}
-
-.chatnew-video-placeholder-icon svg {
-  width: 48px;
-  height: 48px;
-}
-
-.chatnew-video-placeholder-text {
-  font-size: 1.5rem;
-  font-weight: 500;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.chatnew-video-placeholder-subtitle {
-  font-size: 0.9rem;
-  margin: 0;
-  color: rgba(255, 255, 255, 0.5);
-  animation: placeholderFade 2s ease-in-out infinite;
-}
-
-.chatnew-video-stream {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 0 40px 40px 0;
-  background: #000;
-  min-height: 200px;
-}
-
-@keyframes placeholderPulse {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 0.8;
-  }
-  50% {
-    transform: scale(1.05);
-    opacity: 1;
-  }
-}
-
-@keyframes placeholderFade {
-  0%, 100% {
-    opacity: 0.5;
-  }
-  50% {
-    opacity: 0.8;
-  }
-}
-
-/* 挂断按钮 */
-.chatnew-hangup-btn {
-  position: absolute;
-  bottom: 30px;
-  left: calc(50% - 30px); /* 向左偏移 30px */
-  transform: translateX(-50%);
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  background: #ef4444;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
-  transition: all 0.3s ease;
-  z-index: 10;
-}
-
-.chatnew-hangup-btn:hover:not(.is-hanging-up) {
-  background: #dc2626;
-  transform: translateX(-50%) scale(1.1);
-  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.6);
-}
-
-.chatnew-hangup-btn:active:not(.is-hanging-up) {
-  transform: translateX(-50%) scale(0.95);
-}
-
-.chatnew-hangup-btn.is-hanging-up {
-  animation: hangupSlideDown 1.5s ease-out forwards;
-  pointer-events: none;
-}
-
-.chatnew-hangup-btn svg {
-  width: 28px;
-  height: 28px;
-}
-
-@keyframes hangupSlideDown {
-  0% {
-    transform: translateX(-50%) translateY(0);
-    opacity: 1;
-  }
-  100% {
-    transform: translateX(-50%) translateY(calc(73vh - 30px - 60px));
-    opacity: 0;
-  }
-}
-
-/* 右侧消息区域 */
-.chatnew-messages-wrapper {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
   min-width: 0;
-  justify-content: flex-end;
 }
 
-.chatnew-messages {
-  flex: 0 1 auto;
-  max-height: 35vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 20px 40px 20px 0;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  scroll-behavior: smooth;
-  margin-bottom: 20px;
-  align-items: flex-end;
-}
-
-.chatnew-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: auto;
-  min-height: 100px;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 1.1rem;
-  padding-bottom: 20px;
-}
-
-/* 语音通话控制容器 - 固定在底部，包含四个按钮 */
-.chatnew-voice-controls-container {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  width: 100%;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 10;
-  box-sizing: border-box;
-  pointer-events: none; /* 让容器本身不拦截点击事件 */
-  /* 向右微调（平移） */
-  transform: translateX(100px);
-}
-
-/* 控件本身可以接收点击事件 */
-.chatnew-voice-controls-container > * {
-  pointer-events: auto;
-  width: 100%;
-}
-
-.chatnew-message {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  animation: messageSlideIn 0.4s ease-out;
-  opacity: 0;
-  animation-fill-mode: forwards;
-  width: 100%;
-  max-width: 85%;
-}
-
-@keyframes messageSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.chatnew-message-content {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 24px;
-  padding: 12px 16px;
-  max-width: 80%;
-  word-wrap: break-word;
-  color: #ffffff;
-  font-size: 1rem;
-  line-height: 1.5;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+/* =========================================
+   通用卡片样式 (新)
+   ========================================= */
+.chatnew-card {
+  background: rgba(20, 20, 20, 0.6); /* 深色半透明背景 */
+  backdrop-filter: blur(20px);       /* 毛玻璃效果 */
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: 32px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  position: relative;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.chatnew-message--user {
-  align-items: flex-end;
-}
-
-.chatnew-message--agent,
-.chatnew-message--ai {
-  align-items: flex-start;
-}
-
-.chatnew-message--agent .chatnew-message-content,
-.chatnew-message--ai .chatnew-message-content {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-}
-
-.chatnew-message--user .chatnew-message-content {
-  background: rgba(255, 255, 255, 0.95);
-  border-color: rgba(255, 255, 255, 0.5);
-  color: #2c3e50;
-  margin-left: auto;
-}
-
-.chatnew-message--loading .chatnew-message-content {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-
-.chatnew-message-content:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-}
-
-.chatnew-message-time {
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.5);
-  padding-left: 4px;
-}
-
-.chatnew-input-container {
+/* 左上：视频卡片 */
+.chatnew-card-video {
+  flex: 1; /* 占据剩余高度 */
+  min-height: 0;
   display: flex;
-  gap: 12px;
-  align-items: flex-end;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.3);
-  backdrop-filter: blur(10px);
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+  flex-direction: column;
 }
 
-.chatnew-input {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
-  padding: 12px 16px;
-  color: #ffffff;
-  font-size: 1rem;
-  font-family: inherit;
-  resize: none;
-  outline: none;
-  transition: all 0.3s ease;
-  min-height: 44px;
-  max-height: 120px;
-  overflow-y: auto;
-}
-
-.chatnew-input::placeholder {
-  color: rgba(255, 255, 255, 0.5);
-}
-
-.chatnew-input:focus {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.4);
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.1);
-}
-
-.chatnew-send-btn {
-  padding: 12px 24px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  border-radius: 12px;
-  color: #ffffff;
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
-  min-width: 80px;
-}
-
-.chatnew-send-btn:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
-}
-
-.chatnew-send-btn:active:not(:disabled) {
-  transform: translateY(0);
-}
-
-.chatnew-send-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: none;
-}
-
-/* 滚动条样式 */
-.chatnew-messages::-webkit-scrollbar {
-  width: 6px;
-}
-
-.chatnew-messages::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 3px;
-}
-
-.chatnew-messages::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 3px;
-}
-
-.chatnew-messages::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
-}
-
-/* 打字指示器 */
-.chatnew-typing-indicator {
-  display: inline-flex;
-  gap: 4px;
+/* 左下：脑电波卡片 */
+.chatnew-card-eeg {
+  height: 240px; /* 固定高度 */
+  background: #000000; /* 纯黑背景突出波形 */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   align-items: center;
 }
 
-.chatnew-typing-indicator span {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.6);
-  animation: typingBounce 1.4s infinite ease-in-out;
+/* 右侧：角色卡片 */
+.chatnew-card-character {
+  height: 100%;
+  background: linear-gradient(135deg, rgba(255, 180, 150, 0.1), rgba(0, 0, 0, 0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.chatnew-typing-indicator span:nth-child(1) {
-  animation-delay: 0s;
+/* =========================================
+   组件适配样式
+   ========================================= */
+
+/* 1. 视频通话区域适配 */
+/* 强制覆盖原本的样式，使其填满卡片 */
+.chatnew-video-frame-override .chatnew-video-frame {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  display: flex !important; /* 确保显示 */
 }
 
-.chatnew-typing-indicator span:nth-child(2) {
-  animation-delay: 0.2s;
+/* 确保内部容器也是满的 */
+.chatnew-video-frame-override .chatnew-chatwindow-wrapper,
+.chatnew-video-frame-override .chat-window,
+.chatnew-video-frame-override .video-container,
+.chatnew-video-frame-override .video-grid,
+.chatnew-video-frame-override .video-item {
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
 }
 
-.chatnew-typing-indicator span:nth-child(3) {
-  animation-delay: 0.4s;
+.chatnew-video-frame-override .video-element {
+  object-fit: cover !important;
+  border-radius: 0 !important;
 }
 
-@keyframes typingBounce {
-  0%, 60%, 100% {
-    transform: translateY(0);
-    opacity: 0.6;
+/* 2. 脑电波显示适配 */
+/* 隐藏旧的悬浮面板样式干扰 */
+.chatnew-eeg-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* 波形图表容器 */
+.eeg-waveform-display {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.eeg-waveform-display .waveform-container--transparent {
+  width: 95% !important;
+  height: 90% !important;
+}
+
+/* 3. Live2D 适配 */
+.chatnew-live2d-container {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* 4. 嵌入式聊天气泡 (右侧卡片底部) */
+.voice-call-chatbox-wrapper {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  z-index: 10;
+  pointer-events: none; /* 允许点击穿透 */
+}
+
+/* 针对嵌入模式微调气泡样式 */
+.voice-call-chatbox-embedded {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  border-radius: 16px;
+  padding: 16px;
+  color: white;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  transition: all 0.3s ease;
+}
+
+/* =========================================
+   底部控制栏 (保持不变，微调层级)
+   ========================================= */
+.chatnew-voice-controls-container {
+  position: fixed;
+  bottom: 0;
+  left: 39.7%; /* 从39%调整为39.7%，向右移动0.7% */
+  right: 0;
+  width: 60.3%; /* 从61%调整为60.3%，保持从left到right的覆盖 */
+  height: 100px;
+  display: flex;
+  /* justify-content: center; *//* 移除居中，让内容自然扩展 */
+  align-items: center;
+  background: linear-gradient(180deg, rgba(247, 249, 250, 0) 0%, rgba(247, 249, 250, 0.8) 100%);
+  z-index: 50;
+  transition: all 0.3s ease;
+  pointer-events: none;
+}
+
+.chatnew-voice-controls-container > * {
+  pointer-events: auto;
+  transform: translateY(-10px); /*稍微上移 */
+  width: 100%; /* 让子元素占满整个容器宽度 */
+}
+
+/* =========================================
+   动画与过渡
+   ========================================= */
+.chatnew-root.is-entering {
+  opacity: 0;
+  animation: chatNewEnter 0.8s ease-out forwards;
+}
+
+@keyframes chatNewEnter {
+  0% { opacity: 0; transform: scale(0.98); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* =========================================
+   响应式调整
+   ========================================= */
+@media (max-width: 1024px) {
+  .chatnew-layout-container {
+    flex-direction: column;
+    padding: 20px 20px 100px 20px;
+    overflow-y: auto; /* 允许垂直滚动 */
   }
-  30% {
-    transform: translateY(-8px);
-    opacity: 1;
+
+  .chatnew-column-left {
+    flex: none;
+    height: 400px; /* 移动端高度 */
+    width: 100%;
+  }
+  
+  .chatnew-column-right {
+    flex: none;
+    height: 500px;
+    width: 100%;
+  }
+
+  .chatnew-card-eeg {
+    height: 180px;
   }
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .chatnew-content {
-    padding: 12px;
-  }
-
-  .chatnew-message-content {
-    max-width: 90%;
-  }
-
-  .chatnew-input-container {
-    padding: 12px;
-  }
+@font-face {
+  font-family: "萌趣甜心体";
+  src: url("../../assets/ttf/萌趣甜心体.ttf");
 }
 
-/* 临时隐藏整个视频帧（按需恢复） */
-.chatnew-video-frame { display: none !important; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
+}

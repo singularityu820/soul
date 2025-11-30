@@ -4,8 +4,23 @@
   color: #eef2ff;
 }
 
+@font-face {
+  font-family: "萌趣甜心体";
+  src: url("./assets/ttf/萌趣甜心体.ttf");
+  font-weight: normal;
+  font-style: normal;
+}
+
+:root {
+  font-family: "萌趣甜心体", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #06121e;
+  color: #eef2ff;
+}
+
 body {
+  font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
   margin: 0;
+  padding: 0;
   background: radial-gradient(circle at top, #0a1f33 0%, #030910 100%);
 }
 
@@ -391,8 +406,3 @@ body {
   white-space: nowrap;
   z-index: 10;
 }
-
-/* ============================================
-
-
-

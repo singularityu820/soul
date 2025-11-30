@@ -1,6 +1,13 @@
+@font-face {
+  font-family: "萌趣甜心体";
+  src: url("../../../assets/ttf/萌趣甜心体.ttf");
+  font-weight: normal;
+  font-style: normal;
+}
+
 /* 用户界面主样式 */
 .user-center {
-  font-family: Arial, sans-serif;
+  font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
   background: url('../img/backgroundUser.jpg') center center / cover no-repeat;
   background-attachment: fixed;
   min-height: 100vh;
@@ -9,6 +16,11 @@
   position: relative;
   padding: 1rem;
   overflow-x: hidden;
+}
+
+/* 为所有元素设置字体 */
+* {
+  font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
 }
 
 /* 临时消息提示样式 */
