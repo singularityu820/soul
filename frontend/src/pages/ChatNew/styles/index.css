@@ -69,8 +69,7 @@
    ========================================= */
 .chatnew-card {
   background: rgba(20, 20, 20, 0.6); /* 深色半透明背景 */
-  backdrop-filter: blur(20px);       /* 毛玻璃效果 */
-  -webkit-backdrop-filter: blur(20px);
+  /* 移除毛玻璃效果 */
   border-radius: 32px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -190,7 +189,7 @@
 /* 针对嵌入模式微调气泡样式 */
 .voice-call-chatbox-embedded {
   background: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(10px);
+  /* 移除毛玻璃效果 */
   border-radius: 16px;
   padding: 16px;
   color: white;
