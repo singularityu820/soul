@@ -322,7 +322,7 @@
 
 .diary-edit-btn:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.95);
+  background: transparent;
   transform: scale(1.1);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
@@ -341,7 +341,7 @@
   padding: 12px;
   border: 2px solid rgba(44, 62, 80, 0.3);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.95);
+  background: transparent;
   font-family: "KaiTi", "STKaiti", "楷体", "行楷-简", Courier, monospace;
   font-size: 1.1rem;
   line-height: 2;
