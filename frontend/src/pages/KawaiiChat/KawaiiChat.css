@@ -1,3 +1,11 @@
+/* 引入自定义字体 */
+@font-face {
+  font-family: "萌趣甜心体";
+  src: url("E:\ReactProject\dv3\soul-main\frontend\src\assets\ttf\萌趣甜心体.ttf");
+  font-weight: normal;
+  font-style: normal;
+}
+
 /* 确保容器占满全屏 */
 html, body {
   margin: 0;
@@ -5,7 +13,7 @@ html, body {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: "Microsoft YaHei", "Heiti SC", sans-serif;
+  font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
 }
 
 /* 1. APP 主容器 */
@@ -56,8 +64,13 @@ html, body {
 }
 
 .avatar-icon {
-  font-size: 28px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   cursor: pointer;
+  object-fit: cover;
+  flex-shrink: 0; /* 防止被压缩 */
+  display: block; /* 确保为块级元素 */
 }
 
 /* 3. 中间聊天区 */
@@ -123,16 +136,17 @@ html, body {
 }
 
 .chat-avatar {
-  width: 60px; /* 头像加大 */
-  height: 60px;
+  width: 40px; /* 恢复原始大小 */
+  height: 40px;
   background: rgba(255,255,255,0.9);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   margin: 0 15px;
-  font-size: 30px;
+  overflow: hidden;
   box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+  flex-shrink: 0; /* 确保在flex布局中不会被压缩 */
 }
 
 /* 气泡样式核心 */
@@ -157,6 +171,12 @@ html, body {
 
 .row-right .bubble-container {
   padding-right: 45px;
+}
+
+/* 狐狸文本框收紧20%的样式 */
+.row-left .bubble-container .message-text {
+  width: 80%; /* 收紧20% */
+  margin: 0 auto; /* 居中显示 */
 }
 
 /* 4. 底部输入区 */

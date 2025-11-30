@@ -8,6 +8,7 @@ import bubbleUser from '../../assets/KawaiiChat/bubble_user.png';
 import inputBar from '../../assets/KawaiiChat/input_bar.png';
 import btnSend from '../../assets/KawaiiChat/btn_send.png';
 import btnCall from '../../assets/KawaiiChat/btn_call.png';
+import foxhead from '../../assets/KawaiiChat/foxhead.jpg';
 // stickerFox 引用可以删掉了，因为下面不用了
 // import stickerFox from '../../assets/KawaiiChat/sticker_fox.jpg';
 
@@ -158,7 +159,7 @@ const KawaiiChat = () => {
         // 更新状态
         setThreadId(newId);
         // 清空旧消息，显示新的开场白
-        setMessages([{ id: 'new-start', type: 'fox', text: '你好呀！这是一个全新的开始 🦊' }]);
+        setMessages([{ id: 'new-start', type: 'fox', text: '这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。' }]);
         
         // 重新连接 WebSocket 到新频道
         connectWebSocket(newId);
@@ -363,7 +364,7 @@ const KawaiiChat = () => {
   return (
     <div className="kawaii-app-container" style={{ backgroundImage: `url(${bgChat})` }}>
       <header className="kawaii-header">
-        <div className="header-left"><span className="avatar-icon">🦊</span></div>
+        <div className="header-left"><img src={foxhead} alt="狐狸头像" className="avatar-icon" /></div>
         <div className="header-title">消息狐 (Online)</div>
         <div className="header-right">
           <img src={btnCall} alt="call" className="icon-call" />
@@ -379,8 +380,8 @@ const KawaiiChat = () => {
         
         <div className="message-list">
           {messages.map((msg) => (
-            <div key={msg.id} className={`message-row ${msg.type === 'user' ? 'row-right' : 'row-left'}`}>
-              {msg.type === 'fox' && <div className="chat-avatar">🦊</div>}
+            <div key={msg.id} className={`message-row ${msg.type === 'user' ? 'row-right' : 'row-left'}`} style={{alignItems: 'flex-start'}}>
+              {msg.type === 'fox' && <div className="chat-avatar"><img src={foxhead} alt="狐狸头像" style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%'}} /></div>}
               <div 
                 className="bubble-container"
                 style={{ 
