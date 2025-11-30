@@ -39,7 +39,9 @@ export default function StarPortalPlanB() {
   
   // 控制全屏弹框显示
   const [showUnityModal, setShowUnityModal] = useState(false);
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false); // 视频加载完成状态
   const iframeRef = useRef(null);
+  const videoRef = useRef(null); // 视频引用
   
   // 控制物品栏显示和折叠状态
   const [showInventory, setShowInventory] = useState(true);
@@ -2637,7 +2639,41 @@ export default function StarPortalPlanB() {
         open={showUnityModal} 
         onClose={handleCloseUnityModal}
         isFullscreen={true}
+        afterClose={() => {
+          // 关闭模态框时重置视频状态
+          setIsVideoLoaded(false);
+        }}
       >
+        {/* 视频加载页面 */}
+        {!isVideoLoaded && (
+          <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+            <video
+              ref={videoRef}
+              src="/loading.mp4"
+              autoPlay
+              loop
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                position: 'absolute',
+                top: 0,
+                left: 0
+              }}
+              onLoadedData={() => {
+                // 视频加载完成后，设置定时器显示Unity游戏
+                // 这里可以根据需要调整显示时间，或者在视频播放结束后显示
+                setTimeout(() => {
+                  setIsVideoLoaded(true);
+                }, 5000); // 3秒后显示Unity游戏
+              }}
+            />
+          </div>
+        )}
+        
+        {/* Unity游戏iframe */}
         <iframe
           ref={iframeRef}
           src={UNITY_IFRAME_URL}
@@ -2645,7 +2681,7 @@ export default function StarPortalPlanB() {
             width: '100%',
             height: '100%',
             border: 'none',
-            display: 'block'
+            display: isVideoLoaded ? 'block' : 'none'
           }}
           title="Unity WebGL"
           allow="fullscreen"

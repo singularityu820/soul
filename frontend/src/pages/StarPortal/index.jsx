@@ -95,6 +95,19 @@ export default function StarPortal() {
     }
     // 移除自动跳转逻辑，让已登录用户也能访问星空首页
 
+    // 检测URL查询参数，自动打开日记模态框
+    const urlParams = new URLSearchParams(window.location.search);
+    const openParam = urlParams.get('open');
+    if (openParam === 'diary') {
+      // 延迟执行，确保组件已完全渲染
+      setTimeout(() => {
+        setActiveStarId(2);
+        setModalOpen(true);
+        // 清除URL参数，避免刷新页面时再次打开
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+      }, 500);
+    }
+
     // 初始化视频：停留在第一帧
     const video = princeVideoRef.current;
     const canvas = canvasRef.current;

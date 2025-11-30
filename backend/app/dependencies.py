@@ -6,6 +6,22 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
+
+# Load environment variables as early as possible
+project_root = Path(__file__).parent.parent.parent  # Go up three levels to reach project root
+load_dotenv(project_root / ".env")
+load_dotenv(project_root / "backend" / "baidu_api_config.env")
+
+# Verify critical environment variables are loaded
+dashscope_key = os.getenv("DASHSCOPE_API_KEY")
+if dashscope_key:
+    print(f"DASHSCOPE_API_KEY loaded: {dashscope_key[:8]}...")
+    logger.info(f"DASHSCOPE_API_KEY loaded: {dashscope_key[:8]}...")
+else:
+    print("WARNING: DASHSCOPE_API_KEY not found in environment")
+    logger.warning("DASHSCOPE_API_KEY not found in environment")
+
 from .config import (
     AgentConfig,
     AvatarConfig,
@@ -35,10 +51,6 @@ from .services.emotion.eeg_waveform import EEGWaveformService
 from .services.voice import VoiceStreamHub
 
 logger = logging.getLogger(__name__)
-
-# Load environment variables
-load_dotenv(Path(__file__).parent.parent / ".env")
-load_dotenv(Path(__file__).parent.parent / "baidu_api_config.env")
 
 # ============================================================================
 # Global Service Instances (Singletons)

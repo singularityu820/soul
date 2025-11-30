@@ -20,9 +20,11 @@ export default function UserCenter() {
     achievements: ["新手玩家", "首次登录"]
   });
   const [gameRate, setGameRate] = useState(0);
+  const [showVideo, setShowVideo] = useState(false);
   
   // 引用
   const tempMessageTimeoutRef = useRef(null);
+  const videoRef = useRef(null);
 
   // 初始化
   useEffect(() => {
@@ -400,6 +402,11 @@ export default function UserCenter() {
     window.location.hash = "#/chatnew";
   };
 
+  // 处理日记图片点击事件
+  const handleDiaryClick = () => {
+    window.location.href = "http://localhost:5173/#/";
+  };
+
   // 获取头像URL
   const getAvatarUrl = (avatarName) => {
     return `./img/${avatarName}.jpg`;
@@ -490,7 +497,7 @@ export default function UserCenter() {
         <div className="diary-count-badge">
           共{diaryCount}篇
         </div>
-        <img src="./img/riji.png" alt="日记图片" className="riji-img" />
+        <img src="./img/riji.png" alt="日记图片" className="riji-img" onClick={handleDiaryClick} style={{ cursor: 'pointer' }} title="点击进入日记页面" />
       </div>
       
       {/* 日记毛玻璃框 - 显示最近聊天记录 */}
@@ -528,4 +535,4 @@ export default function UserCenter() {
     </div>
   );
 }
-
+

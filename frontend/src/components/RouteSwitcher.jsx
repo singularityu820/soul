@@ -12,6 +12,8 @@ export default function RouteSwitcher({ routes, current, onNavigate }) {
         return "新对话";
       case "#/portal-planb":
         return "星空入口(PlanB-3D)";
+      case "#/kawaiichat":
+        return "文本聊天";
       default:
         return path.replace(/^#\//, "");
     }

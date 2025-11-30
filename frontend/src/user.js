@@ -132,10 +132,36 @@ const UserPageUtils = {
         // 添加头像点击切换功能
         this.addAvatarClickHandler();
         
+        // 添加日记图片点击跳转功能
+        this.addRijiClickHandler();
+        
         const username = Cookies.get('username');
         if (username) {
             setInterval(() => this.updateRateImage(username), 30000);
         }
+    },
+    
+    /**
+     * 添加日记图片点击跳转功能
+     */
+    addRijiClickHandler() {
+        const rijiImg = document.querySelector('.riji-img');
+        if (!rijiImg) {
+            console.warn('❌ 未找到日记图片元素');
+            return;
+        }
+        
+        // 添加点击事件监听器
+        rijiImg.addEventListener('click', () => {
+            console.log('📝 点击日记图片，跳转到日记页面...');
+            window.location.href = 'http://localhost:5173/#/';
+        });
+        
+        // 添加鼠标悬停效果
+        rijiImg.style.cursor = 'pointer';
+        rijiImg.title = '点击进入日记页面';
+        
+        console.log('✅ 日记图片点击跳转功能已启用');
     },
 
     /**
@@ -483,12 +509,17 @@ const UserPageUtils = {
 async function initializeUserPage() {
     console.log('🚀 初始化用户页面...');
     
+    // 无论登录状态如何，都添加日记图片点击事件
+    UserPageUtils.addRijiClickHandler();
+    
     // 检查登录状态
     const isLoggedIn = await UserPageUtils.checkLoginAndRedirect();
     
     if (isLoggedIn) {
-        // 添加用户交互功能
-        UserPageUtils.addUserInteractions();
+        // 添加其他用户交互功能
+        UserPageUtils.addLogoutButton();
+        UserPageUtils.addRefreshButton();
+        UserPageUtils.addAvatarClickHandler();
         
         // 显示当前时间
         UserPageUtils.showCurrentTime();

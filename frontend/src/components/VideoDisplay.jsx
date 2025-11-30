@@ -247,9 +247,8 @@ export default function VideoDisplay({ stream, emotionData, isActive, roomId, on
     if (emotionData && 
         emotionData.face_position && 
         emotionData.face_position.length > 0 &&
-        emotionData.emotion && 
-        emotionData.confidence > 0.3 &&  // 只有置信度大于30%时才绘制
-        !emotionData.face_position[0].isDefault) {  // 不绘制默认人脸位置
+        (emotionData.emotion || emotionData.label) && 
+        emotionData.confidence > 0.3) {  // 只有置信度大于30%时才绘制
       
       const facePos = emotionData.face_position[0];
       
@@ -315,7 +314,7 @@ export default function VideoDisplay({ stream, emotionData, isActive, roomId, on
       ctx.strokeRect(x, y, width, height);
       
       // 绘制情绪标签背景
-      const emotion = emotionData.emotion || 'unknown';
+      const emotion = emotionData.emotion || emotionData.label || 'unknown';
       const confidence = emotionData.confidence || 0;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
       ctx.fillRect(x, y - 30, 150, 30);
@@ -366,7 +365,7 @@ export default function VideoDisplay({ stream, emotionData, isActive, roomId, on
         cancelAnimationFrame(animationFrameRef.current);
       }
     };
-  }, [isActive, emotionData, drawFaceDetection]);
+  }, [isActive, emotionData, drawFaceDetection, videoDimensions]);
 
   if (!stream) {
     return (

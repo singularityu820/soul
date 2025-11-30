@@ -301,7 +301,7 @@
         align-items: flex-start;
         justify-content: center;
         pointer-events: none;
-        z-index: 1001;
+        z-index: 999; /* 降低z-index，确保日记图片能接收点击事件 */
       }
       
       /* 日记文本样式 */
@@ -481,7 +481,7 @@
       <div class="riji-text-container" id="rijiTextContainer">
         <p class="riji-text" id="rijiText">这里是日记内容，将通过JavaScript动态更新。最多显示4行文字，超出部分将会被省略。</p>
       </div>
-      <img src="./img/riji.png" alt="日记图片" class="riji-img">
+      <img src="/img/riji.png" alt="日记图片" class="riji-img" onclick="window.location.href='http://localhost:5173/#/'" style="cursor: pointer;" title="点击进入日记页面">
     </div>
     
     <!-- 日记毛玻璃框 -->
