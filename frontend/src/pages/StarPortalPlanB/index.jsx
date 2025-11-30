@@ -10,7 +10,7 @@ import Modal from "../../components/ui/Modal.jsx";
 import Inventory from "../../components/Inventory.jsx";
 
 // Unity iframe 配置
-const UNITY_IFRAME_URL = "https://soultest.vercel.app/";
+const UNITY_IFRAME_URL = "https://soul-game-gzip-vercel.vercel.app/";
 // 提取 origin（用于消息来源验证）
 const UNITY_IFRAME_ORIGIN = new URL(UNITY_IFRAME_URL).origin;
 
@@ -111,6 +111,9 @@ export default function StarPortalPlanB() {
       
       // 验证模型是否完整存在的辅助函数
       const validateModelExists = () => {
+        const scene = sceneRef.current;
+        if (!scene) return { moonValid: false, roseValid: false };
+        
         // 检查月球是否存在且完整
         const moonValid = moonRef.current && 
                          moonLoadedRef.current && 
@@ -186,6 +189,29 @@ export default function StarPortalPlanB() {
         princeRef.current.visible = currentModel === 'prince';
         console.log('Prince visibility updated via useEffect (RAF), visible:', princeRef.current.visible, 'currentModel:', currentModel);
       }
+      
+      // 更新种植的玫瑰的可见性
+      const shouldShowPlantedRoses = currentModel === 'prince';
+      if (plantedRosesRef.current && plantedRosesRef.current.length > 0) {
+        const scene = sceneRef.current;
+        plantedRosesRef.current.forEach((rose) => {
+          if (rose) {
+            // 如果应该显示但不在场景中，重新添加
+            if (shouldShowPlantedRoses && scene && !scene.children.includes(rose)) {
+              console.log('Re-adding planted rose to scene in useEffect');
+              scene.add(rose);
+            }
+            // 设置可见性
+            rose.visible = shouldShowPlantedRoses;
+            rose.traverse((child) => {
+              if (child.isMesh || child.isGroup) {
+                child.visible = shouldShowPlantedRoses;
+              }
+            });
+          }
+        });
+        console.log('Planted roses visibility updated via useEffect (RAF), visible:', shouldShowPlantedRoses, 'currentModel:', currentModel, 'count:', plantedRosesRef.current.length);
+      }
     });
   }, [currentModel]);
   
@@ -207,8 +233,12 @@ export default function StarPortalPlanB() {
       
       // 定义onUnityInt回调函数：iframe中的网页向本网页发送int
       window.onUnityInt = (value) => {
+        console.log('onUnityInt', value);
         if (typeof value === 'number') {
           window.latestUnityValue = value;
+          if (value === 5) {
+            setShowUnityModal(false);
+          }
         }
       };
       
@@ -346,14 +376,21 @@ export default function StarPortalPlanB() {
       
       // 彻底清理场景中所有月球和玫瑰实例
       // 遍历场景中的所有对象，找到所有月球和玫瑰
+      // 注意：不要清理种植的玫瑰（通过 userData.isPlanted 标识）
       const objectsToRemove = [];
       scene.traverse((object) => {
+        // 跳过种植的玫瑰
+        if (object.userData && object.userData.isPlanted) {
+          return;
+        }
+        
         // 检查是否是月球（通过位置和缩放判断，或者通过ref判断）
         if (object === moonRef.current || 
             (object.position.y === 100 && object.scale.x === 50 && object.scale.y === 50 && object.scale.z === 50)) {
           objectsToRemove.push({ type: 'moon', object });
         }
         // 检查是否是玫瑰（通过位置和缩放判断，或者通过ref判断）
+        // 注意：种植的玫瑰 scale 是 6，不会被这个条件匹配
         if (object === roseRef.current ||
             (object.position.y === 1.0 && object.scale.x === 0.6 && object.scale.y === 0.6 && object.scale.z === 0.6 && 
              Math.abs(object.rotation.y - Math.PI / 4) < 0.1)) {
@@ -1453,6 +1490,53 @@ export default function StarPortalPlanB() {
         
         const currentModelValue = currentModelRef.current;
         
+        // 如果当前显示的是小王子，先检测是否点击到种植的玫瑰
+        if (currentModelValue === 'prince' && plantedRosesRef.current && plantedRosesRef.current.length > 0) {
+          // 检测所有种植的玫瑰
+          for (const plantedRose of plantedRosesRef.current) {
+            if (plantedRose && sceneRef.current && sceneRef.current.children.includes(plantedRose)) {
+              const intersects = raycasterRef.current.intersectObject(plantedRose, true);
+              
+              if (intersects.length > 0) {
+                const clickedMesh = intersects[0].object;
+                
+                // 检查点击的mesh是否属于种植的玫瑰（通过向上查找父对象）
+                let currentObject = clickedMesh;
+                let isPlantedRose = false;
+                while (currentObject) {
+                  if (currentObject.userData && currentObject.userData.isPlanted) {
+                    isPlantedRose = true;
+                    break;
+                  }
+                  currentObject = currentObject.parent;
+                }
+                
+                // 如果点击到种植的玫瑰
+                if (isPlantedRose && clickedMesh.userData.clickable) {
+                  console.log('Clicked on planted rose:', clickedMesh.name || 'unnamed');
+                  
+                  // 触发切换到月球玫瑰的逻辑
+                  // 先恢复视角到初始值，等恢复完成后再切换模型
+                  const initialView = princeInitialViewRef.current;
+                  
+                  // 设置目标视角为初始值
+                  targetSphericalRef.current.radius = initialView.radius;
+                  targetSphericalRef.current.theta = initialView.theta;
+                  targetSphericalRef.current.phi = initialView.phi;
+                  
+                  // 标记正在恢复视角
+                  isRestoringViewRef.current = true;
+                  
+                  console.log('Restoring view to initial position before switching to moon-rose');
+                  
+                  // 停止后续的小王子点击检测
+                  return;
+                }
+              }
+            }
+          }
+        }
+        
         // 如果当前显示的是小王子，检测点击小王子
         if (currentModelValue === 'prince' && princeRef.current) {
           const intersects = raycasterRef.current.intersectObject(princeRef.current, true);
@@ -1525,6 +1609,8 @@ export default function StarPortalPlanB() {
                 if (child.isMesh) {
                   // 确保mesh可见
                   child.visible = true;
+                  // 给种植的玫瑰添加可点击标识
+                  child.userData.clickable = true;
                   
                   if (child.material) {
                     // 如果材质是数组，需要克隆每个材质
@@ -1680,22 +1766,13 @@ export default function StarPortalPlanB() {
               return; // 不执行后续的视角恢复逻辑
             }
             
-            // 如果没有携带玫瑰，检查是否是可点击的mesh（用于切换模型）
+            // 如果没有携带玫瑰，检查是否是可点击的mesh（用于打开游戏）
             if (clickedMesh.userData.clickable) {
               console.log('Clicked on clickable mesh:', clickedMesh.name || 'unnamed');
               
-              // 先恢复视角到初始值，等恢复完成后再切换模型
-              const initialView = princeInitialViewRef.current;
-              
-              // 设置目标视角为初始值
-              targetSphericalRef.current.radius = initialView.radius;
-              targetSphericalRef.current.theta = initialView.theta;
-              targetSphericalRef.current.phi = initialView.phi;
-              
-              // 标记正在恢复视角
-              isRestoringViewRef.current = true;
-              
-              console.log('Restoring view to initial position before switching model');
+              // 直接打开游戏弹框
+              setShowUnityModal(true);
+              console.log('Opening game modal');
             }
           }
         }
@@ -1893,6 +1970,21 @@ export default function StarPortalPlanB() {
             console.log('Rose visible set to true');
           }
           
+          // 隐藏所有种植的玫瑰
+          if (plantedRosesRef.current && plantedRosesRef.current.length > 0) {
+            plantedRosesRef.current.forEach((rose) => {
+              if (rose) {
+                rose.visible = false;
+                rose.traverse((child) => {
+                  if (child.isMesh || child.isGroup) {
+                    child.visible = false;
+                  }
+                });
+              }
+            });
+            console.log('Hiding all planted roses when switching to moon-rose');
+          }
+          
           // 清除恢复视角标记
           isRestoringViewRef.current = false;
         }
@@ -1969,21 +2061,31 @@ export default function StarPortalPlanB() {
         cursorRoseRef.current.renderOrder = 999; // 设置高渲染顺序，确保在最前面
       }
       
-      // 确保所有种植的玫瑰始终可见
-      // 使用ref数组来确保所有种植的玫瑰都可见
+      // 根据当前模型状态控制种植的玫瑰的可见性
+      // 只在显示小王子时显示种植的玫瑰
+      const shouldShowPlantedRoses = modelValue === 'prince';
       if (plantedRosesRef.current && plantedRosesRef.current.length > 0) {
         plantedRosesRef.current.forEach((rose) => {
           if (rose && sceneRef.current && sceneRef.current.children.includes(rose)) {
-            rose.visible = true;
-            // 确保种植的玫瑰也在最前面渲染
-            rose.traverse((child) => {
-              if (child.isMesh || child.isGroup) {
-                child.visible = true;
-                child.renderOrder = 998; // 比跟随鼠标的玫瑰稍低，但比普通对象高
-              }
-            });
-          } else if (rose && !sceneRef.current?.children.includes(rose)) {
-            // 如果玫瑰不在场景中，重新添加
+            rose.visible = shouldShowPlantedRoses;
+            // 确保种植的玫瑰也在最前面渲染（仅在可见时）
+            if (shouldShowPlantedRoses) {
+              rose.traverse((child) => {
+                if (child.isMesh || child.isGroup) {
+                  child.visible = true;
+                  child.renderOrder = 998; // 比跟随鼠标的玫瑰稍低，但比普通对象高
+                }
+              });
+            } else {
+              // 隐藏时也隐藏所有子对象
+              rose.traverse((child) => {
+                if (child.isMesh || child.isGroup) {
+                  child.visible = false;
+                }
+              });
+            }
+          } else if (rose && !sceneRef.current?.children.includes(rose) && shouldShowPlantedRoses) {
+            // 如果玫瑰不在场景中且应该显示，重新添加
             console.warn('Planted rose not in scene, re-adding:', rose);
             if (sceneRef.current) {
               sceneRef.current.add(rose);
@@ -1996,9 +2098,9 @@ export default function StarPortalPlanB() {
       if (sceneRef.current) {
         sceneRef.current.traverse((object) => {
           if (object.userData && object.userData.isPlanted) {
-            object.visible = true;
-            // 确保种植的玫瑰也在最前面渲染
-            if (object.isMesh || object.isGroup) {
+            object.visible = shouldShowPlantedRoses;
+            // 确保种植的玫瑰也在最前面渲染（仅在可见时）
+            if (shouldShowPlantedRoses && (object.isMesh || object.isGroup)) {
               object.renderOrder = 998;
             }
           }
@@ -2056,17 +2158,18 @@ export default function StarPortalPlanB() {
               });
             }
             
-            // 如果玫瑰不在场景中，重新添加
-            if (!isInScene && sceneRef.current) {
+            // 如果玫瑰不在场景中且应该显示，重新添加
+            if (!isInScene && sceneRef.current && modelValue === 'prince') {
               console.warn('Planted rose not in scene, re-adding:', index);
               sceneRef.current.add(rose);
             }
             
-            // 强制确保可见
-            rose.visible = true;
+            // 根据当前模型状态设置可见性
+            const shouldShow = modelValue === 'prince';
+            rose.visible = shouldShow;
             rose.traverse((child) => {
               if (child.isMesh || child.isGroup) {
-                child.visible = true;
+                child.visible = shouldShow;
               }
             });
           }
@@ -2336,6 +2439,26 @@ export default function StarPortalPlanB() {
     if (roseRef.current && roseLoadedRef.current) {
       roseRef.current.visible = false;
     }
+    
+    // 显示所有种植的玫瑰
+    if (plantedRosesRef.current && plantedRosesRef.current.length > 0) {
+      plantedRosesRef.current.forEach((rose) => {
+        if (rose && sceneRef.current) {
+          // 确保玫瑰在场景中
+          if (!sceneRef.current.children.includes(rose)) {
+            sceneRef.current.add(rose);
+          }
+          // 设置为可见
+          rose.visible = true;
+          rose.traverse((child) => {
+            if (child.isMesh || child.isGroup) {
+              child.visible = true;
+            }
+          });
+        }
+      });
+      console.log('Showing all planted roses when switching to prince');
+    }
   };
 
   // 处理物品点击
@@ -2492,20 +2615,22 @@ export default function StarPortalPlanB() {
       {currentModel === 'moon-rose' && roseClicked && !showUnityModal && (
         <button 
           className="start-rose-journey-button"
-          onClick={handleOpenUnityModal}
+          onClick={handleSwitchToPrince}
         >
-          开启寻玫之旅
+          返回心海
         </button>
       )}
       
       {currentModel === 'prince' && (
-        <Inventory
-          items={inventoryItems}
-          onItemClick={handleItemClick}
-          visible={showInventory}
-          collapsed={inventoryCollapsed}
-          onCollapseToggle={(collapsed) => setInventoryCollapsed(collapsed)}
-        />
+        <>
+          <Inventory
+            items={inventoryItems}
+            onItemClick={handleItemClick}
+            visible={showInventory}
+            collapsed={inventoryCollapsed}
+            onCollapseToggle={(collapsed) => setInventoryCollapsed(collapsed)}
+          />
+        </>
       )}
       
       <Modal 

@@ -1,5 +1,6 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./Inventory.css";
+import bagIcon from "../pages/StarPortalPlanB/styles/img/bag.png";
 
 /**
  * 物品栏组件
@@ -18,6 +19,31 @@ export default function Inventory({
 }) {
   const [selectedItem, setSelectedItem] = useState(null);
   const [isCollapsed, setIsCollapsed] = useState(collapsed);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  // 检测弹框是否打开
+  useEffect(() => {
+    const checkModal = () => {
+      const modal = document.querySelector('.ui-modal.is-open');
+      setIsModalOpen(!!modal);
+    };
+
+    // 初始检查
+    checkModal();
+
+    // 使用 MutationObserver 监听 DOM 变化
+    const observer = new MutationObserver(checkModal);
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class']
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
 
   const handleItemClick = (item) => {
     setSelectedItem(item);
@@ -36,14 +62,14 @@ export default function Inventory({
 
   if (!visible) return null;
 
+  // 如果弹框打开，隐藏物品栏
+  if (isModalOpen) return null;
+
   return (
     <div className={`inventory-container ${isCollapsed ? 'collapsed' : ''}`}>
       {isCollapsed ? (
         <div className="inventory-icon-button" onClick={handleToggleCollapse} title="展开物品栏">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M4 6H20M4 12H20M4 18H20" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            <rect x="2" y="2" width="20" height="20" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none" opacity="0.3"/>
-          </svg>
+          <img src={bagIcon} alt="物品栏" className="inventory-bag-icon" />
         </div>
       ) : (
         <>

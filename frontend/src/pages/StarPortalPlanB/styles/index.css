@@ -187,3 +187,41 @@
     0 4px 16px rgba(0, 0, 0, 0.5);
 }
 
+.enter-game-button {
+  position: fixed;
+  top: 140px;
+  right: 20px;
+  width: 48px;
+  height: 48px;
+  background: rgba(10, 24, 38, 0.8);
+  border: 1px solid rgba(73, 110, 139, 0.35);
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 8px 24px rgba(2, 6, 11, 0.45);
+  transition: all 0.3s ease;
+  z-index: 40;
+  padding: 0;
+  overflow: hidden;
+  font-size: 24px;
+  line-height: 1;
+  filter: drop-shadow(0 0 4px rgba(135, 206, 250, 0.4));
+}
+
+.enter-game-button:hover {
+  background: rgba(10, 24, 38, 0.95);
+  border-color: rgba(73, 110, 139, 0.6);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 12px 32px rgba(2, 6, 11, 0.6);
+  filter: drop-shadow(0 0 8px rgba(135, 206, 250, 0.8));
+}
+
+.enter-game-button:active {
+  transform: translateY(0) scale(1);
+  box-shadow: 0 6px 16px rgba(2, 6, 11, 0.5);
+}
+

@@ -1,7 +1,9 @@
 .inventory-container {
   position: fixed !important;
-  bottom: 20px;
-  left: 20px;
+  top: 80px; /* 展开时也放在设置按钮下方，避免重叠 */
+  right: 20px;
+  left: auto;
+  bottom: auto;
   width: 320px;
   max-height: 400px;
   background: rgba(0, 0, 50, 0.3);
@@ -23,7 +25,10 @@
               height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
               max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
               padding 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-              left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+              left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              right 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              top 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   pointer-events: auto;
   margin: 0;
@@ -88,8 +93,10 @@
   height: 50px;
   max-height: 50px;
   padding: 0;
-  left: 0;
-  bottom: 20px;
+  right: 20px;
+  top: 80px; /* 放在设置按钮下方，避免重叠 */
+  left: auto;
+  bottom: auto;
   border-radius: 12px 12px 12px 12px;
   overflow: visible;
 }
@@ -213,6 +220,19 @@
 .inventory-icon-button:hover svg {
   filter: drop-shadow(0 0 10px rgba(135, 206, 250, 0.9));
   transform: rotate(5deg);
+}
+
+.inventory-bag-icon {
+  width: 70%;
+  height: 70%;
+  object-fit: contain;
+  filter: drop-shadow(0 0 5px rgba(135, 206, 250, 0.6));
+  transition: all 0.3s ease;
+}
+
+.inventory-icon-button:hover .inventory-bag-icon {
+  filter: drop-shadow(0 0 10px rgba(135, 206, 250, 0.9));
+  transform: scale(1.1);
 }
 
 .inventory-title {
