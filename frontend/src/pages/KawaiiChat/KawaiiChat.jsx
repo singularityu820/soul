@@ -159,7 +159,7 @@ const KawaiiChat = () => {
         // 更新状态
         setThreadId(newId);
         // 清空旧消息，显示新的开场白
-        setMessages([{ id: 'new-start', type: 'fox', text: '这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。这是一个测试文本，所以是多行的。' }]);
+        setMessages([{ id: 'new-start', type: 'fox', text: '你好呀，这是一个新的开始' }]);
         
         // 重新连接 WebSocket 到新频道
         connectWebSocket(newId);
