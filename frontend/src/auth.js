@@ -1,8 +1,8 @@
 // 认证相关的API函数
 import Cookies from 'js-cookie';
-export const targetUrl = "http://localhost:5173/user.html";
-export const LoginUrl = "http://localhost:5173/index.html";
-const serverUrl = "http://localhost:8000";
+export const targetUrl = "/user.html";
+export const LoginUrl = "/index.html";
+const serverUrl = "http://81.68.219.218:5173";
 export async function getInfoAtServer(name) {
 
     let response =await fetch(`${serverUrl}/info`, {

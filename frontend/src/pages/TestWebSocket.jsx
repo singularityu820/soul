@@ -11,7 +11,7 @@ const TestWebSocket = () => {
   const socketRef = useRef(null);
   const messagesEndRef = useRef(null);
 
-  const API_BASE = 'http://localhost:8000';
+  const API_BASE = '';
 
   // 滚动到消息底部
   const scrollToBottom = () => {
@@ -104,9 +104,11 @@ const TestWebSocket = () => {
     }
     
     setStatus('connecting');
-    addLog(`正在连接WebSocket: ws://localhost:8000/ws/chat?thread_id=${id}`);
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws/chat?thread_id=${id}`;
+    addLog(`正在连接WebSocket: ${wsUrl}`);
     
-    const socket = new WebSocket(`ws://localhost:8000/ws/chat?thread_id=${id}`);
+    const socket = new WebSocket(wsUrl);
     socketRef.current = socket;
     
     socket.onopen = () => {

@@ -13,20 +13,20 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://localhost:8000",
+        target: "http://81.68.219.218:5173",
         changeOrigin: true,
         // 移除rewrite规则，保持/api前缀
       },
       "/volcano-image-emotion": {
-        target: "http://localhost:8000",
+        target: "http://81.68.219.218:5173",
         changeOrigin: true,
       },
       "/generated_images": {
-        target: "http://localhost:8000",
+        target: "http://81.68.219.218:5173",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://localhost:8000",
+        target: "ws://81.68.219.218:5173",
         changeOrigin: true,
         ws: true,
       },

@@ -4,7 +4,7 @@
  */
 
 // API基础URL
-const API_BASE_URL = 'http://localhost:8000/volcano-image-emotion';
+const API_BASE_URL = 'http://81.68.219.218:5173/volcano-image-emotion';
 
 /**
  * 基于日记内容和情绪生成图片
@@ -143,5 +143,5 @@ export const getFullImageUrl = (imagePath) => {
   }
   
   // 否则拼接后端URL
-  return `http://localhost:8000${imagePath}`;
+  return `http://81.68.219.218:5173${imagePath}`;
 };

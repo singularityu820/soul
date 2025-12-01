@@ -404,7 +404,7 @@ export default function UserCenter() {
 
   // 处理日记图片点击事件
   const handleDiaryClick = () => {
-    window.location.href = "http://localhost:5173/#/";
+    window.location.href = "/#/";
   };
 
   // 获取头像URL

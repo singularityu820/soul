@@ -154,7 +154,7 @@ const UserPageUtils = {
         // 添加点击事件监听器
         rijiImg.addEventListener('click', () => {
             console.log('📝 点击日记图片，跳转到日记页面...');
-            window.location.href = 'http://localhost:5173/#/';
+            window.location.href = '#/portal';
         });
         
         // 添加鼠标悬停效果

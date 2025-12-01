@@ -46,7 +46,7 @@ const KawaiiChat = () => {
       wsRef.current = null;
     }
 
-    const ws = new WebSocket(`ws://localhost:8000/ws/chat?thread_id=${tid}`);
+    const ws = new WebSocket(`ws://81.68.219.218:5173/ws/chat?thread_id=${tid}`);
     
     ws.onopen = () => {
       console.log(`✅ WebSocket 已连接到会话: ${tid}`);
@@ -96,7 +96,7 @@ const KawaiiChat = () => {
         let currentThreadId = null;
 
         // 获取会话列表
-        const listRes = await fetch('http://localhost:8000/chat/threads');
+        const listRes = await fetch('http://81.68.219.218:5173/chat/threads');
         const threads = await listRes.json();
 
         if (threads.length > 0) {
@@ -106,7 +106,7 @@ const KawaiiChat = () => {
           console.log("📂 加载旧会话 ID:", currentThreadId);
 
           // 加载历史消息
-          const historyRes = await fetch(`http://localhost:8000/chat/threads/${currentThreadId}/messages`);
+          const historyRes = await fetch(`http://81.68.219.218:5173/chat/threads/${currentThreadId}/messages`);
           const history = await historyRes.json();
           
           const formattedHistory = history.map(m => ({
@@ -148,7 +148,7 @@ const KawaiiChat = () => {
   const createNewChat = async () => {
     try {
         console.log("🆕 正在创建新会话...");
-        const createRes = await fetch('http://localhost:8000/chat/threads', {
+        const createRes = await fetch('http://81.68.219.218:5173/chat/threads', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ title: "新的一天" })
@@ -190,7 +190,7 @@ const KawaiiChat = () => {
 
     try {
       // 使用流式接口发送消息
-      const response = await fetch(`http://localhost:8000/chat/threads/${threadId}/text-messages-stream`, {
+      const response = await fetch(`http://81.68.219.218:5173/chat/threads/${threadId}/text-messages-stream`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: textToSend })
