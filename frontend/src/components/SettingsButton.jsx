@@ -72,9 +72,9 @@ export default function SettingsButton() {
 
   const handleGoHome = () => {
     if (window.navigate) {
-      window.navigate("#/");
+      window.navigate("#/user");
     } else {
-      window.location.hash = "#/";
+      window.location.hash = "#/user";
     }
     setIsOpen(false);
   };

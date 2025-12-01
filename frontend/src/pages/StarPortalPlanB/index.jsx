@@ -40,8 +40,10 @@ export default function StarPortalPlanB() {
   // 控制全屏弹框显示
   const [showUnityModal, setShowUnityModal] = useState(false);
   const [isVideoLoaded, setIsVideoLoaded] = useState(false); // 视频加载完成状态
+  const [showEndVideo, setShowEndVideo] = useState(false); // 控制是否显示结束视频
   const iframeRef = useRef(null);
   const videoRef = useRef(null); // 视频引用
+  const endVideoRef = useRef(null); // 结束视频引用
   
   // 控制物品栏显示和折叠状态
   const [showInventory, setShowInventory] = useState(true);
@@ -49,8 +51,8 @@ export default function StarPortalPlanB() {
   
   // 物品栏数据
   const [inventoryItems, setInventoryItems] = useState([
-    { id: 1, name: '玫瑰', icon: null, count: 1, description: '一朵美丽的玫瑰' },
-    { id: 2, name: '星星', icon: null, count: 5, description: '闪烁的星星' },
+    // { id: 1, name: '玫瑰', icon: null, count: 1, description: '一朵美丽的玫瑰' },
+    // { id: 2, name: '星星', icon: null, count: 5, description: '闪烁的星星' },
   ]);
   
   // 控制是否正在携带玫瑰（跟随鼠标）
@@ -102,6 +104,10 @@ export default function StarPortalPlanB() {
   const lastMouseYRef = useRef(0); // 上一次鼠标Y位置
   const dragStartXRef = useRef(0); // 拖动开始时的X位置
   const dragStartYRef = useRef(0); // 拖动开始时的Y位置
+
+  useEffect(() => {
+    console.log('inventoryItems', inventoryItems);
+  }, [inventoryItems]);
 
   // 同步currentModel到ref，并更新模型可见性
   useEffect(() => {
@@ -233,44 +239,42 @@ export default function StarPortalPlanB() {
       // 初始化latestUnityValue
       window.latestUnityValue = null;
       
-      // 定义onUnityInt回调函数：iframe中的网页向本网页发送int
-      window.onUnityInt = (value) => {
-        console.log('onUnityInt', value);
-        if (typeof value === 'number') {
-          window.latestUnityValue = value;
-          if (value === 5) {
-            setShowUnityModal(false);
-          }
-        }
-      };
-      
-      // 定义sendIntToUnity函数：本网页向iframe发送int
-      window.sendIntToUnity = (value) => {
-        if (typeof value !== 'number') return;
-        
-        if (iframeRef.current?.contentWindow) {
-          iframeRef.current.contentWindow.postMessage({
-            type: 'sendIntToUnity',
-            value: value
-          }, UNITY_IFRAME_URL);
-        }
-      };
-      
       // 监听来自iframe的postMessage消息
       const handleMessage = (event) => {
         console.log('handleMessage', event);
         // 验证消息来源
-        if (event.origin !== UNITY_IFRAME_ORIGIN) return;
+        // if (event.origin !== UNITY_IFRAME_ORIGIN) return;
         
-        // 处理来自Unity的消息：{ from: "unity", value }
-        if (event.data?.from === 'unity' && typeof event.data.value === 'number') {
-          const value = event.data.value;
-          window.latestUnityValue = value;
+        // 处理 GameQuit 消息：{ from: "unity", type }
+        // type=1: 中途退出游戏, type=2: 游戏结束退出游戏
+        if (event.data?.from === 'unity' && !event.data?.event && typeof event.data.type === 'number') {
+          const type = event.data.type;
+          console.log('收到 GameQuit 消息, type =', type);
           
-          if (typeof window.onUnityInt === 'function') {
-            window.onUnityInt(value);
+          if (type === 2) {
+            // 游戏结束：先播放 end 视频作为转场动画
+            setInventoryItems([{ id: 1, name: '玫瑰', icon: null, count: 1, description: '玫瑰' }]);
+            // 隐藏 iframe，显示 end 视频
+            setIsVideoLoaded(false);
+            setShowEndVideo(true);
+            
+            // 等待 end 视频播放完成后关闭弹框
+            // 视频的 onEnded 事件会处理关闭逻辑
+          } else if (type === 1) {
+            // 中途退出：直接关闭游戏弹框
+            setShowUnityModal(false);
           }
         }
+        
+        // 处理 GameStart 消息：{ from: "unity", event: "GameStart" }
+        // if (event.data?.from === 'unity' && event.data?.event === 'GameStart') {
+        //   console.log('收到 GameStart 消息，游戏开始');
+          
+        //   // 如果定义了 GameStart 回调，调用它
+        //   if (typeof window.GameStart === 'function') {
+        //     window.GameStart();
+        //   }
+        // }
       };
       
       window.addEventListener('message', handleMessage);
@@ -279,9 +283,7 @@ export default function StarPortalPlanB() {
       return () => {
         window.removeEventListener('message', handleMessage);
         if (typeof window !== 'undefined') {
-          delete window.onUnityInt;
-          delete window.sendIntToUnity;
-          delete window.latestUnityValue;
+          delete window.GameStart;
         }
       };
     }
@@ -2151,13 +2153,13 @@ export default function StarPortalPlanB() {
             if (!rose.debugFrameCount) rose.debugFrameCount = 0;
             rose.debugFrameCount++;
             if (rose.debugFrameCount % 60 === 0) {
-              console.log(`Planted rose ${index}:`, {
-                inScene: isInScene,
-                visible: rose.visible,
-                worldPos: worldPos,
-                distanceToCamera: distanceToCamera,
-                scale: rose.scale
-              });
+              // console.log(`Planted rose ${index}:`, {
+              //   inScene: isInScene,
+              //   visible: rose.visible,
+              //   worldPos: worldPos,
+              //   distanceToCamera: distanceToCamera,
+              //   scale: rose.scale
+              // });
             }
             
             // 如果玫瑰不在场景中且应该显示，重新添加
@@ -2642,10 +2644,44 @@ export default function StarPortalPlanB() {
         afterClose={() => {
           // 关闭模态框时重置视频状态
           setIsVideoLoaded(false);
+          setShowEndVideo(false);
         }}
       >
+        {/* 结束转场视频 */}
+        {showEndVideo && (
+          <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+            <video
+              ref={endVideoRef}
+              src="/end.mp4"
+              autoPlay
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                position: 'absolute',
+                top: 0,
+                left: 0
+              }}
+              onEnded={() => {
+                // 视频播放完成后关闭弹框
+                console.log('End video finished, closing modal');
+                setShowUnityModal(false);
+                setShowEndVideo(false);
+              }}
+              onError={(e) => {
+                console.error('Error playing end video:', e);
+                // 如果视频播放出错，直接关闭弹框
+                setShowUnityModal(false);
+                setShowEndVideo(false);
+              }}
+            />
+          </div>
+        )}
+        
         {/* 视频加载页面 */}
-        {!isVideoLoaded && (
+        {!isVideoLoaded && !showEndVideo && (
           <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
             <video
               ref={videoRef}
@@ -2667,7 +2703,7 @@ export default function StarPortalPlanB() {
                 // 这里可以根据需要调整显示时间，或者在视频播放结束后显示
                 setTimeout(() => {
                   setIsVideoLoaded(true);
-                }, 5000); // 3秒后显示Unity游戏
+                }, 5000); // 5秒后显示Unity游戏
               }}
             />
           </div>
@@ -2681,7 +2717,7 @@ export default function StarPortalPlanB() {
             width: '100%',
             height: '100%',
             border: 'none',
-            display: isVideoLoaded ? 'block' : 'none'
+            display: isVideoLoaded && !showEndVideo ? 'block' : 'none'
           }}
           title="Unity WebGL"
           allow="fullscreen"

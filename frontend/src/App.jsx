@@ -7,6 +7,7 @@ import KawaiiChat from "./pages/KawaiiChat/KawaiiChat.jsx";
 import UserCenter from "./pages/UserCenter";
 import NotFound from "./pages/NotFound";
 import RouteSwitcher from "./components/RouteSwitcher.jsx";
+import SettingsButton from "./components/SettingsButton.jsx";
 const normalizeHash = () => {
   const raw = window.location.hash || "#/";
   // 去掉结尾斜杠（保留根路径）
@@ -17,7 +18,7 @@ const normalizeHash = () => {
 export default function App() {
   const ROUTES = useMemo(
     () => ({
-      "#/": StarPortal,
+      "#/": UserCenter,
       // "#/portal": StarPortal,
       "#/portal-planb": StarPortalPlanB,
       "#/chatnew": ChatNew,
@@ -45,7 +46,8 @@ export default function App() {
   return (
     <>
       <Component />
-      <RouteSwitcher routes={ROUTES} current={route} onNavigate={(p) => window.navigate(p)} />
+      {/*<RouteSwitcher routes={ROUTES} current={route} onNavigate={(p) => window.navigate(p)} />*/}
+      {route !== "#/user" && <SettingsButton />}
     </>
   );
 }

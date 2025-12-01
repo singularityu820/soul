@@ -6,7 +6,7 @@ import turnVoiceSound from "./styles/turn-voice.mp3";
 import { log } from "three";
 import Cookies from "js-cookie";
 import ImageGeneration from '../../../components/ImageGeneration';
-import './styles/Diary.css';
+import './styles/diary.css';
 import './styles/DiarySave.css';
 import { 
   generateImageWithEmotion, 
