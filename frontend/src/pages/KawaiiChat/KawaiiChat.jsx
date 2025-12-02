@@ -367,7 +367,7 @@ const KawaiiChat = () => {
         <div className="header-left"><img src={foxhead} alt="狐狸头像" className="avatar-icon" /></div>
         <div className="header-title">消息狐 (Online)</div>
         <div className="header-right">
-          <img src={btnCall} alt="call" className="icon-call" />
+          <img src={btnCall} alt="call" className="icon-call" onClick={() => window.location.hash = "#/chatnew"} />
           
           {/* 这里绑定了点击事件，点击 + 号创建新对话 */}
           <span className="icon-more" onClick={createNewChat} style={{cursor: 'pointer'}}>+</span>

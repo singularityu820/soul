@@ -404,9 +404,9 @@ export default function StarPortal() {
       // 转场动画持续1.5秒后跳转
       setTimeout(() => {
         if (window.navigate) {
-          window.navigate("#/chatnew");
+          window.navigate("#/kawaiichat");
         } else {
-          window.location.hash = "#/chatnew";
+          window.location.hash = "#/kawaiichat";
         }
       }, 1500);
     }, 500);
@@ -470,9 +470,9 @@ export default function StarPortal() {
                   setIsTransitioningToChat(true);
                   setTimeout(() => {
                     if (window.navigate) {
-                      window.navigate("#/chatnew");
+                      window.navigate("#/kawaiichat");
                     } else {
-                      window.location.hash = "#/chatnew";
+                      window.location.hash = "#/kawaiichat";
                     }
                   }, 1500);
                 }}
@@ -530,5 +530,8 @@ export default function StarPortal() {
     </div>
   );
 }
+
+
+
 
 
