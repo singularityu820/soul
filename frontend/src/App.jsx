@@ -6,6 +6,7 @@ import ChatNew from "./pages/ChatNew/index.jsx";
 import KawaiiChat from "./pages/KawaiiChat/KawaiiChat.jsx";
 import UserCenter from "./pages/UserCenter";
 import NotFound from "./pages/NotFound";
+import LoginModal from "./pages/LoginModal";
 import RouteSwitcher from "./components/RouteSwitcher.jsx";
 const normalizeHash = () => {
   const raw = window.location.hash || "#/";
@@ -18,6 +19,7 @@ export default function App() {
   const ROUTES = useMemo(
     () => ({
       "#/": StarPortal,
+      "#/login": LoginModal,
       // "#/portal": StarPortal,
       "#/portal-planb": StarPortalPlanB,
       "#/chatnew": ChatNew,

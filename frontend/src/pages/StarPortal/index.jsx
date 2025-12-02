@@ -25,8 +25,7 @@ export default function StarPortal() {
   const [activeStarId, setActiveStarId] = useState(null);
   // 弹层开启动画状态
   const [modalOpen, setModalOpen] = useState(false);
-  // 登录模态框状态
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  // 登录状态管理 - 不再需要直接管理模态框显示
   // 背景视频是否循环
   const [loopVideo, setLoopVideo] = useState(true);
   // 王子视频引用
@@ -88,10 +87,10 @@ export default function StarPortal() {
     queryStars();
     getRoseGrowthProgress();
     
-    // 检查登录状态，如果未登录则显示登录模态框
+    // 检查登录状态，如果未登录则重定向到登录页面
     const isLoggedIn = checkLoginStatus();
     if (!isLoggedIn) {
-      setShowLoginModal(true);
+      window.navigate("#/login");
     }
     // 移除自动跳转逻辑，让已登录用户也能访问星空首页
 
@@ -520,13 +519,7 @@ export default function StarPortal() {
         {components[activeStarId] || <div style={{ padding: 16 }}>敬请期待</div>}
       </Modal>
       
-      {/* 登录模态框 */}
-      {showLoginModal && (
-        <LoginModal 
-          onClose={() => setShowLoginModal(false)} 
-          onLoginSuccess={handleLoginSuccess} 
-        />
-      )}
+      {/* 登录模态框已移除，改为单独的登录页面 #/login */}
     </div>
   );
 }

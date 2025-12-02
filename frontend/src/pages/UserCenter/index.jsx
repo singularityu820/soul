@@ -32,7 +32,7 @@ export default function UserCenter() {
     const username = Cookies.get("username");
     if (!username) {
       // 未登录，跳转到登录页
-      window.navigate("#/");
+      window.navigate("#/login");
       return;
     }
     

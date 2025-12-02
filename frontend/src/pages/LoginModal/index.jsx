@@ -1,9 +1,22 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import "./styles/index.css";
-import { login, register } from "../../auth.js";
+import { login, register, checkLoginStatus } from "../../auth.js";
 
-export default function LoginModal({ onClose, onLoginSuccess }) {
+export default function LoginModal() {
   const [isLogin, setIsLogin] = useState(true); // true: 登录模式, false: 注册模式
+  
+  // 检查登录状态，如果已登录则重定向到首页
+  useEffect(() => {
+    const isLoggedIn = checkLoginStatus();
+    if (isLoggedIn) {
+      // 已登录用户不应访问登录页面，重定向到首页
+      if (window.navigate) {
+        window.navigate("#/");
+      } else {
+        window.location.hash = "#/";
+      }
+    }
+  }, []);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
@@ -26,7 +39,6 @@ export default function LoginModal({ onClose, onLoginSuccess }) {
       if (result.success) {
         setMessage(isLogin ? "登录成功！" : "注册成功！");
         setTimeout(() => {
-          onLoginSuccess();
           // 登录成功后跳转到用户界面
           if (window.navigate) {
             window.navigate("#/user");
@@ -54,7 +66,7 @@ export default function LoginModal({ onClose, onLoginSuccess }) {
   };
 
   return (
-    <div className="login-modal">
+    <div className="login-page">
       <div className="login-container">
         <div className="login-header">
           <h2>LetPrLogin</h2>
