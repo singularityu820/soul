@@ -497,7 +497,7 @@ export default function UserCenter() {
         <div className="diary-count-badge">
           共{diaryCount}篇
         </div>
-        <img src="./img/riji.png" alt="日记图片" className="riji-img" onClick={handleDiaryClick} style={{ cursor: 'pointer' }} title="点击进入日记页面" />
+        <img src="/img/riji.png" alt="日记图片" className="riji-img" onClick={handleDiaryClick} style={{ cursor: 'pointer' }} title="点击进入日记页面" />
       </div>
       
       {/* 日记毛玻璃框 - 显示最近聊天记录 */}

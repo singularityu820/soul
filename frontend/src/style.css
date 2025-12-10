@@ -83,7 +83,7 @@ body {
     font-family: "萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif;
     line-height: 1.6;
     color: var(--text-color);
-    background: url('../img/background.jpg') center center / cover no-repeat;
+    background: url('../public/img/background.jpg') center center / cover no-repeat;
     background-attachment: fixed;
     min-height: 100vh;
     position: relative;

@@ -8,6 +8,8 @@ import UserCenter from "./pages/UserCenter";
 import NotFound from "./pages/NotFound";
 import LoginModal from "./pages/LoginModal";
 import RouteSwitcher from "./components/RouteSwitcher.jsx";
+import SettingsButton from "./components/SettingsButton.jsx";
+
 const normalizeHash = () => {
   const raw = window.location.hash || "#/";
   // 去掉结尾斜杠（保留根路径）
@@ -15,10 +17,19 @@ const normalizeHash = () => {
   return raw;
 };
 
+// 在模块加载时就定义 window.navigate，确保在任何地方调用时都可用
+if (typeof window !== 'undefined' && !window.navigate) {
+  window.navigate = (path) => {
+    if (!path || typeof path !== "string") return;
+    if (!path.startsWith("#")) path = `#${path}`;
+    window.location.hash = path;
+  };
+}
+
 export default function App() {
   const ROUTES = useMemo(
     () => ({
-      "#/": StarPortal,
+      "#/": UserCenter,
       "#/login": LoginModal,
       // "#/portal": StarPortal,
       "#/portal-planb": StarPortalPlanB,
@@ -32,12 +43,15 @@ export default function App() {
   const [route, setRoute] = useState(normalizeHash());
 
   useEffect(() => {
-    // 统一导航助手
-    window.navigate = (path) => {
-      if (!path || typeof path !== "string") return;
-      if (!path.startsWith("#")) path = `#${path}`;
-      window.location.hash = path;
-    };
+    // 确保 window.navigate 已定义（如果之前没有定义，这里会重新定义）
+    if (!window.navigate) {
+      window.navigate = (path) => {
+        if (!path || typeof path !== "string") return;
+        if (!path.startsWith("#")) path = `#${path}`;
+        window.location.hash = path;
+      };
+    }
+    
     const handleHashChange = () => setRoute(normalizeHash());
     window.addEventListener("hashchange", handleHashChange);
     return () => window.removeEventListener("hashchange", handleHashChange);
@@ -47,7 +61,8 @@ export default function App() {
   return (
     <>
       <Component />
-      <RouteSwitcher routes={ROUTES} current={route} onNavigate={(p) => window.navigate(p)} />
+        {/*<RouteSwitcher routes={ROUTES} current={route} onNavigate={(p) => window.navigate(p)} />*/}
+        {route !== "#/user" && <SettingsButton />}
     </>
   );
 }
