@@ -4,7 +4,7 @@
  */
 
 // API基础URL
-const API_BASE_URL = 'http://xbxm.cloud:80/volcano-image-emotion';
+const API_BASE_URL = 'https://xbxm.cloud:443/volcano-image-emotion';
 
 /**
  * 基于日记内容和情绪生成图片
@@ -143,5 +143,5 @@ export const getFullImageUrl = (imagePath) => {
   }
   
   // 否则拼接后端URL
-  return `http://xbxm.cloud:80${imagePath}`;
+  return `https://xbxm.cloud:443${imagePath}`;
 };

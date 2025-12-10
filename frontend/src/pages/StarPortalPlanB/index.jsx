@@ -10,7 +10,7 @@ import Modal from "../../components/ui/Modal.jsx";
 import Inventory from "../../components/Inventory.jsx";
 
 // Unity iframe 配置
-const UNITY_IFRAME_URL = "https://soul-game-gzip-vercel.vercel.app/";
+const UNITY_IFRAME_URL = "https://fanciful-creponne-dc9dc2.netlify.app/";
 // 提取 origin（用于消息来源验证）
 const UNITY_IFRAME_ORIGIN = new URL(UNITY_IFRAME_URL).origin;
 

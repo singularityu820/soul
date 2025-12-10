@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useAudioQueue } from "./useAudioQueue";
 
 const DEV_SERVER_PORTS = new Set(["5173", "4173", "3000", "4174", "8080"]);
-const FALLBACK_HTTP_BASE = "http://localhost:8000";
+const FALLBACK_HTTP_BASE = "https://xbxm.cloud:443";
 const ENV_VOICE_STREAM_WS_URL = import.meta.env.VITE_VOICE_STREAM_WS_URL;
 
 const normalizeVoiceStreamUrl = (rawUrl, origin) => {

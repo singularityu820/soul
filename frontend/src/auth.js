@@ -2,7 +2,7 @@
 import Cookies from 'js-cookie';
 export const targetUrl = "/user.html";
 export const LoginUrl = "/index.html";
-const serverUrl = "http://xbxm.cloud:80";
+const serverUrl = "https://xbxm.cloud:443";
 export async function getInfoAtServer(name) {
 
     let response =await fetch(`${serverUrl}/info`, {

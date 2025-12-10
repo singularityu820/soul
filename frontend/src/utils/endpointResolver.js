@@ -1,5 +1,5 @@
 const DEV_SERVER_PORTS = new Set(["5173", "4173", "4174", "3000", "3001", "8080", "9000"]);
-const FALLBACK_HTTP_BASE = "http://localhost:8000";
+const FALLBACK_HTTP_BASE = "https://xbxm.cloud:443";
 
 const WINDOW_CONFIG_SOURCES = [
   (w) => w.__SOUL_CONFIG__,

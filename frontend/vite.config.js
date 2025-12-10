@@ -37,20 +37,20 @@ export default defineConfig({
     },
     proxy: {
       "/api": {
-        target: "http://xbxm.cloud:80",
+        target: "https://xbxm.cloud:443",
         changeOrigin: true,
         // 移除rewrite规则，保持/api前缀
       },
       "/volcano-image-emotion": {
-        target: "http://xbxm.cloud:80",
+        target: "https://xbxm.cloud:443",
         changeOrigin: true,
       },
       "/generated_images": {
-        target: "http://xbxm.cloud:80",
+        target: "https://xbxm.cloud:443",
         changeOrigin: true,
       },
       "/ws": {
-        target: "ws://xbxm.cloud:80",
+        target: "ws://xbxm.cloud:443",
         changeOrigin: true,
         ws: true,
       },
