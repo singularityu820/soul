@@ -195,6 +195,34 @@ export default function ChatNew() {
       
       {/* 使用新的 CSS 类名布局 */}
       <div className="chatnew-layout-container">
+        {/* 返回按钮 */}
+        <div style={{ position: 'absolute', top: 20, left: 20, zIndex: 100 }}>
+          <button 
+            onClick={() => window.location.hash = '#/kawaiichat'}
+            style={{ 
+              padding: '12px 24px',
+              background: 'rgba(20, 20, 20, 0.6)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              borderRadius: '16px',
+              color: 'white',
+              fontSize: '16px',
+              cursor: 'pointer',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              fontFamily: '萌趣甜心体, Microsoft YaHei, Heiti SC, sans-serif'
+            }}
+            onMouseOver={(e) => {
+              e.target.style.transform = 'translateY(-2px)';
+              e.target.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.4)';
+            }}
+            onMouseOut={(e) => {
+              e.target.style.transform = 'translateY(0)';
+              e.target.style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
+            }}
+          >
+            返回文本聊天
+          </button>
+        </div>
         
         {/* 左侧列 */}
         <div className="chatnew-column-left">
