@@ -399,7 +399,7 @@ export default function UserCenter() {
 
   // 处理通话记录点击事件
   const handleChatHistoryClick = () => {
-    window.location.hash = "#/chatnew";
+    window.location.hash = "#/kawaiichat";
   };
 
   // 处理日记图片点击事件
