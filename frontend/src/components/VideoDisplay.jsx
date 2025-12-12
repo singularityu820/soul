@@ -205,7 +205,7 @@ export default function VideoDisplay({ stream, emotionData, isActive, roomId, on
       captureAndDetectEmotion();
       
       // 设置定时检测，每1秒一次
-      emotionDetectionIntervalRef.current = setInterval(captureAndDetectEmotion, 500);
+      emotionDetectionIntervalRef.current = setInterval(captureAndDetectEmotion, 3000);
       console.log('Emotion detection interval set to 1 second');
     } else {
       // 清除定时器
