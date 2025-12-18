@@ -242,6 +242,11 @@ const ImageGeneration = ({
                 <img src={generatedImage} alt="生成的图片" />
               </div>
               
+              <div className="emotion-info">
+                <h3>情感倾向: {emotion}</h3>
+                <p>置信度: {(confidence * 100).toFixed(1)}%</p>
+              </div>
+
               {Object.keys(adjustmentOptions).length > 0 && (
                 <div className="adjustment-section">
                   <h3>调整图片</h3>

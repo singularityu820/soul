@@ -5,7 +5,10 @@
 用于从日记内容中识别情绪，如"治愈"、"遗憾"等
 """
 
+import os
 import re
+import httpx
+import json
 from typing import Dict, List, Tuple, Optional
 
 
@@ -14,7 +17,13 @@ class EmotionRecognitionService:
     
     def __init__(self):
         """初始化情绪识别服务"""
-        # 定义情绪关键词映射
+        # 百度API配置
+        self.baidu_api_key = os.getenv("BAIDU_API_KEY", "bv3r9JECrySEcngEJJrCC3t8")
+        self.baidu_secret_key = os.getenv("BAIDU_SECRET_KEY", "TeSwR72qvzbld4YZwRc3FNN9vL2Y7LSL")
+        self.baidu_access_token = None
+        self.baidu_token_expire = 0
+        
+        # 定义情绪关键词映射（备用）
         self.emotion_keywords = {
             "治愈": [
                 "温暖", "舒适", "安心", "平静", "放松", "治愈", "疗愈", "舒缓", "宁静", 
@@ -71,6 +80,39 @@ class EmotionRecognitionService:
             "孤独": ["空旷", "孤单", "剪影", "独自", "空寂", "冷色调", "简约", "空旷感"],
             "感激": ["温暖", "阳光", "明亮", "和谐", "柔和", "金色", "温暖色调", "感恩氛围"]
         }
+        
+        # 百度情绪识别结果映射到我们的情绪类型
+        self.baidu_emotion_map = {
+            0: "负向",
+            1: "中性", 
+            2: "正向"
+        }
+    
+    def _get_baidu_access_token(self):
+        """
+        获取百度API访问令牌
+        
+        Returns:
+            str: 访问令牌
+        """
+        # 检查令牌是否有效
+        import time
+        current_time = time.time()
+        if self.baidu_access_token and current_time < self.baidu_token_expire:
+            return self.baidu_access_token
+        
+        # 调用百度API获取新令牌
+        url = f"https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id={self.baidu_api_key}&client_secret={self.baidu_secret_key}"
+        
+        response = httpx.get(url, timeout=10.0)
+        if response.status_code != 200:
+            raise Exception(f"Failed to get access token: {response.text}")
+        
+        result = response.json()
+        self.baidu_access_token = result.get("access_token")
+        self.baidu_token_expire = current_time + result.get("expires_in", 3600)
+        
+        return self.baidu_access_token
     
     def recognize_emotion(self, text: str) -> Tuple[str, float]:
         """
@@ -85,44 +127,87 @@ class EmotionRecognitionService:
         if not text:
             return "平静", 0.0
         
-        # 统计每种情绪的关键词出现次数
-        emotion_scores = {}
-        
-        for emotion, keywords in self.emotion_keywords.items():
-            count = 0
-            for keyword in keywords:
-                # 使用正则表达式进行全词匹配
-                pattern = re.escape(keyword)
-                matches = re.findall(pattern, text, re.IGNORECASE)
-                count += len(matches)
+        try:
+            # 获取百度API访问令牌
+            access_token = self._get_baidu_access_token()
             
-            # 计算情绪得分（关键词出现次数）
-            emotion_scores[emotion] = count
-        
-        # 如果没有检测到任何情绪关键词，返回"平静"
-        if all(score == 0 for score in emotion_scores.values()):
-            return "平静", 0.0
-        
-        # 找出得分最高的情绪
-        max_emotion = max(emotion_scores, key=emotion_scores.get)
-        max_score = emotion_scores[max_emotion]
-        
-        # 计算置信度（基于关键词出现次数，归一化到0-1范围）
-        total_words = len(text)
-        confidence = min(1.0, max_score / max(1, total_words / 100))
-        
-        return max_emotion, confidence
+            # 调用百度情感倾向分析接口
+            url = f"https://aip.baidubce.com/rpc/2.0/nlp/v1/sentiment_classify?charset=UTF-8&access_token={access_token}"
+            headers = {"Content-Type": "application/json"}
+            data = {"text": text[:2048]}
+            
+            response = httpx.post(url, headers=headers, json=data, timeout=10.0)
+            if response.status_code != 200:
+                raise Exception(f"API request failed: {response.text}")
+            
+            result = response.json()
+            if "error_code" in result:
+                raise Exception(f"API error: {result['error_msg']}")
+            
+            # 解析结果
+            items = result.get("items", [])
+            if not items:
+                return "平静", 0.0
+            
+            item = items[0]
+            sentiment = item.get("sentiment", 1)  # 默认中性
+            confidence = item.get("confidence", 0.0)
+            
+            # 将百度情绪分类（0:负向，1:中性，2:正向）映射到我们的情绪类型
+            emotion_type = self.baidu_emotion_map.get(sentiment, "中性")
+            
+            return emotion_type, confidence
+        except Exception as e:
+            # 如果百度API调用失败，回退到关键词匹配
+            print(f"百度API调用失败，回退到关键词匹配: {str(e)}")
+            
+            # 统计每种情绪的关键词出现次数
+            emotion_scores = {}
+            
+            for emotion, keywords in self.emotion_keywords.items():
+                count = 0
+                for keyword in keywords:
+                    # 使用正则表达式进行全词匹配
+                    pattern = re.escape(keyword)
+                    matches = re.findall(pattern, text, re.IGNORECASE)
+                    count += len(matches)
+                
+                # 计算情绪得分（关键词出现次数）
+                emotion_scores[emotion] = count
+            
+            # 如果没有检测到任何情绪关键词，返回"平静"
+            if all(score == 0 for score in emotion_scores.values()):
+                return "平静", 0.0
+            
+            # 找出得分最高的情绪
+            max_emotion = max(emotion_scores, key=emotion_scores.get)
+            max_score = emotion_scores[max_emotion]
+            
+            # 计算置信度（基于关键词出现次数，归一化到0-1范围）
+            total_words = len(text)
+            confidence = min(1.0, max_score / max(1, total_words / 100))
+            
+            return max_emotion, confidence
     
     def get_emotion_image_style(self, emotion: str) -> List[str]:
         """
         获取情绪对应的图片风格关键词
         
         Args:
-            emotion: 情绪类型
+            emotion: 情绪类型（负向、中性、正向或原来的情绪类型）
             
         Returns:
             List[str]: 图片风格关键词列表
         """
+        # 适配百度API返回的情绪类型
+        if emotion == "负向":
+            return ["阴沉", "灰色", "雨天", "暗淡", "忧郁", "冷色调", "低饱和度", "忧伤氛围"]
+        elif emotion == "正向":
+            return ["明亮", "鲜艳", "活力", "阳光", "欢快", "色彩丰富", "明亮色调", "充满活力"]
+        elif emotion == "中性":
+            return ["平衡", "和谐", "自然", "舒适", "温和", "中性色调", "适中亮度", "平静氛围"]
+        
+        # 保留对原有情绪类型的支持
         return self.emotion_image_styles.get(emotion, ["中性", "平衡", "和谐"])
     
     def extract_image_prompt_with_emotion(self, text: str, custom_prompt: Optional[str] = None) -> str:
@@ -145,8 +230,8 @@ class EmotionRecognitionService:
         # 获取情绪对应的风格关键词
         style_keywords = self.get_emotion_image_style(emotion)
         
-        # 构建最终提示词：整篇日记内容 + 情绪风格关键词
-        final_prompt = f"{base_prompt}, {', '.join(style_keywords)}, {emotion}氛围"
+        # 构建最终提示词：整篇日记内容 + 情绪风格关键词 + 不要生成人的表情的说明
+        final_prompt = f"{base_prompt}, {', '.join(style_keywords)}, {emotion}氛围, 不要生成人的表情, no human faces, no human expressions"
         
         return final_prompt
     
@@ -192,12 +277,32 @@ class EmotionRecognitionService:
         根据情绪类型获取图片调整选项
         
         Args:
-            emotion: 情绪类型
+            emotion: 情绪类型（负向、中性、正向或原来的情绪类型）
             
         Returns:
             Dict[str, str]: 调整选项字典，包含选项名称和对应的提示词修改
         """
-        # 根据不同情绪类型定义不同的调整选项
+        # 适配百度API返回的情绪类型
+        if emotion == "负向":
+            return {
+                "风格更暖": "添加温暖色调，增加希望感，减轻负面情绪",
+                "增加细节": "增强情感表达的细节，添加积极元素，平衡负面情绪",
+                "更换场景": "更换为更加平静或充满希望的场景，如日落、温暖的室内"
+            }
+        elif emotion == "正向":
+            return {
+                "风格更暖": "增强温暖明亮的色调，提高饱和度，更加欢快的氛围",
+                "增加细节": "添加更多庆祝元素，丰富画面细节，增强欢乐感",
+                "更换场景": "更换为更加欢乐庆祝的场景，如派对、阳光明媚的海滩"
+            }
+        elif emotion == "中性":
+            return {
+                "风格更暖": "增加温暖色调，营造更加舒适温馨的氛围",
+                "增加细节": "添加更多细节元素，丰富画面层次，增强质感表现",
+                "更换场景": "更换为更加生动或有情感表达的场景，如花园、咖啡馆"
+            }
+        
+        # 保留对原有情绪类型的支持
         options = {
             "治愈": {
                 "风格更暖": "增加温暖色调，更柔和的光线，更加舒适的氛围",
