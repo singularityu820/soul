@@ -13,7 +13,7 @@ export default function VoiceCallChatBox({ transcript, response, className = '' 
       )}
       {response && (
         <div className="transcript-ai">
-          <strong>AI：</strong> {response}
+          <strong>星屿：</strong> {response}
         </div>
       )}
     </div>

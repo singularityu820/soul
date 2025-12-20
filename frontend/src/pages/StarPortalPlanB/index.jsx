@@ -3,14 +3,14 @@ import "./styles/index.css";
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { TextureLoader } from "three";
-import moonModelPath from "./styles/img/the_old_moon/scene.gltf?url";
-import roseModelPath from "./styles/img/rose/scene.gltf?url";
-import princeModelPath from "./styles/img/lowpoly_fox/scene.gltf?url";
+import moonModelPath from "/models/the_old_moon/scene.gltf?url";
+import roseModelPath from "/models/rose/scene.gltf?url";
+import princeModelPath from "/models/lowpoly_fox/scene.gltf?url";
 import Modal from "../../components/ui/Modal.jsx";
 import Inventory from "../../components/Inventory.jsx";
 
 // Unity iframe 配置
-const UNITY_IFRAME_URL = "https://fanciful-creponne-dc9dc2.netlify.app/";
+const UNITY_IFRAME_URL = "https://soulgame.netlify.app/";
 // 提取 origin（用于消息来源验证）
 const UNITY_IFRAME_ORIGIN = new URL(UNITY_IFRAME_URL).origin;
 

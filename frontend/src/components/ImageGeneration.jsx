@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import './styles/ImageGeneration.css';
+import FoxMessage from './ui/FoxMessage';
 import { 
   generateImageWithEmotion, 
   adjustImage, 
@@ -33,6 +34,27 @@ const ImageGeneration = ({
   const [imageStyle, setImageStyle] = useState('realistic'); // realistic, anime, oil_painting
   const [imageSize, setImageSize] = useState('1024x1024'); // 1024x1024, 1024x768, 768x1024
   const [originalPrompt, setOriginalPrompt] = useState(''); // 保存原始提示词
+  
+  // 消息提示状态管理
+  const [messageState, setMessageState] = useState({
+    visible: false,
+    message: '',
+    type: 'info'
+  });
+  
+  // 显示消息的辅助函数
+  const showMessage = useCallback((message, type = 'info') => {
+    setMessageState({
+      visible: true,
+      message,
+      type
+    });
+  }, []);
+  
+  // 关闭消息
+  const handleMessageClose = useCallback(() => {
+    setMessageState(prev => ({ ...prev, visible: false }));
+  }, []);
 
   // 获取情绪类型
   useEffect(() => {
@@ -94,11 +116,17 @@ const ImageGeneration = ({
         setConfidence(result.confidence);
         setAdjustmentOptions(result.adjustment_options || {});
         setOriginalPrompt(result.original_prompt || ''); // 保存原始提示词
+        setError(''); // 清除错误
+        showMessage('图片生成成功！✨', 'success');
       } else {
-        setError(result.message || '生成图片失败');
+        const errorMsg = result.message || '生成图片失败';
+        setError(errorMsg);
+        showMessage(errorMsg, 'error');
       }
     } catch (err) {
-      setError('生成图片失败: ' + err.message);
+      const errorMsg = '生成图片失败: ' + err.message;
+      setError(errorMsg);
+      showMessage(errorMsg, 'error');
     } finally {
       setIsGenerating(false);
     }
@@ -124,11 +152,17 @@ const ImageGeneration = ({
       
       if (result.success) {
         setGeneratedImage(result.image_url ? getFullImageUrl(result.image_url) : base64ToImageUrl(result.base64_data));
+        setError(''); // 清除错误
+        showMessage('图片调整成功！✨', 'success');
       } else {
-        setError(result.message || '调整图片失败');
+        const errorMsg = result.message || '调整图片失败';
+        setError(errorMsg);
+        showMessage(errorMsg, 'error');
       }
     } catch (err) {
-      setError('调整图片失败: ' + err.message);
+      const errorMsg = '调整图片失败: ' + err.message;
+      setError(errorMsg);
+      showMessage(errorMsg, 'error');
     } finally {
       setIsAdjusting(false);
     }
@@ -136,6 +170,11 @@ const ImageGeneration = ({
 
   // 保存日记和图片
   const handleSave = () => {
+    if (!generatedImage) {
+      showMessage('请先生成图片再保存哦～', 'warning');
+      return;
+    }
+    
     if (onSave) {
       onSave({
         diaryContent,
@@ -144,7 +183,11 @@ const ImageGeneration = ({
         confidence
       });
     }
-    onClose();
+    showMessage('保存成功！日记和图片已保存 🦊', 'success');
+    // 延迟关闭，让用户看到成功消息
+    setTimeout(() => {
+      onClose();
+    }, 1000);
   };
 
   // 重置状态
@@ -157,6 +200,7 @@ const ImageGeneration = ({
     setError('');
     setSelectedEmotion('');
     setOriginalPrompt('');
+    setMessageState({ visible: false, message: '', type: 'info' });
     onClose();
   };
 
@@ -234,7 +278,6 @@ const ImageGeneration = ({
                 {isGenerating ? '生成中...' : '生成图片'}
               </button>
               
-              {error && <div className="error-message">{error}</div>}
             </div>
           ) : (
             <div className="result-container">
@@ -277,8 +320,6 @@ const ImageGeneration = ({
                 </button>
                 <button className="save-btn" onClick={handleSave}>保存日记和图片</button>
               </div>
-              
-              {error && <div className="error-message">{error}</div>}
             </div>
           )}
         </div>
@@ -287,6 +328,15 @@ const ImageGeneration = ({
           <button className="cancel-btn" onClick={handleClose}>取消</button>
         </div>
       </div>
+      
+      {/* 可爱狐狸风格的消息提示 */}
+      <FoxMessage
+        visible={messageState.visible}
+        message={messageState.message}
+        type={messageState.type}
+        duration={3000}
+        onClose={handleMessageClose}
+      />
     </div>
   );
 };

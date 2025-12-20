@@ -1,0 +1,99 @@
+/* 词云组件样式 */
+.wordcloud-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: transparent;
+}
+
+.wordcloud-canvas {
+  display: block;
+  animation: fadeInScale 0.6s ease-out;
+  transition: transform 0.3s ease;
+}
+
+.wordcloud-canvas:hover {
+  transform: scale(1.02);
+}
+
+/* 加载动画 */
+.wordcloud-loading {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  color: #8B4513;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
+}
+
+.wordcloud-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #FFD700;
+  border-top: 4px solid #FF6B9D;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 词云在日记中的显示样式 */
+.diary-wordcloud-wrapper {
+  width: 100%;
+  padding: 20px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, #FFF8DC 0%, #FFFEF5 100%);
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(212, 165, 116, 0.15);
+  border: 2px solid #D4A574;
+  animation: slideDown 0.5s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.diary-wordcloud-title {
+  text-align: center;
+  font-size: 1.3rem;
+  color: #8B4513;
+  margin-bottom: 15px;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
+  font-weight: 600;
+}
+
+.diary-wordcloud-content {
+  width: 100%;
+  min-height: 300px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}

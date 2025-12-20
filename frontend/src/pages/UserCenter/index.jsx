@@ -3,6 +3,8 @@ import "./styles/index.css";
 import Cookies from "js-cookie";
 import { getLatestDiaryText, getRecentMessages, getUserInfo } from "../../utils/api";
 import { getInfoAtServer, writeInfoAtServer } from "../../auth.js";
+import Modal from "../../components/ui/Modal.jsx";
+import Diary from "../StarPortal/components/Diary.jsx";
 
 export default function UserCenter() {
   // 状态管理
@@ -13,6 +15,9 @@ export default function UserCenter() {
   const [diaryCount, setDiaryCount] = useState(0);
   const [recentMessages, setRecentMessages] = useState([]);
   const [tempMessage, setTempMessage] = useState("");
+  // 弹层开启动画状态
+  const [modalOpen, setModalOpen] = useState(false);
+  const handleClose = () => setModalOpen(false);
   const [gameProgress, setGameProgress] = useState({
     level: 1,
     experience: 0,
@@ -404,7 +409,7 @@ export default function UserCenter() {
 
   // 处理日记图片点击事件
   const handleDiaryClick = () => {
-    window.location.href = "/#/";
+    setModalOpen(true);
   };
 
   // 获取头像URL
@@ -532,6 +537,10 @@ export default function UserCenter() {
           return <img src={src} alt="进度图片" className="jindu-img" />;
         })()}
       </div>
+
+      <Modal open={modalOpen} onClose={handleClose} afterClose={() => {}} isFullscreen={true}>
+        <Diary />
+      </Modal>
     </div>
   );
 }

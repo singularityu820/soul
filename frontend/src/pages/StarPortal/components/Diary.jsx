@@ -6,6 +6,9 @@ import turnVoiceSound from "./styles/turn-voice.mp3";
 import { log } from "three";
 import Cookies from "js-cookie";
 import ImageGeneration from '../../../components/ImageGeneration';
+import WordCloud from '../../../components/WordCloud';
+import WordCloudPreview from '../../../components/WordCloudPreview';
+import FoxMessage from '../../../components/ui/FoxMessage';
 import './styles/diary.css';
 import './styles/DiarySave.css';
 import { 
@@ -76,6 +79,33 @@ export default function Diary() {
   const [currentPage, setCurrentPage] = useState(0);
   const [showImageGeneration, setShowImageGeneration] = useState(false);
   const [diaryContentForImage, setDiaryContentForImage] = useState('');
+  
+  // 词云相关的状态管理
+  const [showWordCloudPreview, setShowWordCloudPreview] = useState(false);
+  const [showWordCloudInDiary, setShowWordCloudInDiary] = useState(false);
+  const [wordCloudContent, setWordCloudContent] = useState('');
+  const [wordCloudImageUrl, setWordCloudImageUrl] = useState(null);
+  
+  // 消息提示状态管理
+  const [messageState, setMessageState] = useState({
+    visible: false,
+    message: '',
+    type: 'info'
+  });
+  
+  // 显示消息的辅助函数
+  const showMessage = useCallback((message, type = 'info') => {
+    setMessageState({
+      visible: true,
+      message,
+      type
+    });
+  }, []);
+  
+  // 关闭消息
+  const handleMessageClose = useCallback(() => {
+    setMessageState(prev => ({ ...prev, visible: false }));
+  }, []);
   // 每页的文字内容（可按实际需求修改）
   // 每页的文字内容
   const pageTexts = useMemo(() => {
@@ -869,7 +899,7 @@ export default function Diary() {
 
     // 3. 并发执行所有保存请求
     if (saveTasks.length === 0) {
-      alert("没有检测到有效的日记ID，无需保存。");
+      showMessage("没有检测到有效的日记ID，无需保存。", 'warning');
       console.groupEnd();
       return;
     }
@@ -887,14 +917,14 @@ export default function Diary() {
         setDiaryContentForImage(combinedContent);
         setShowImageGeneration(true);
         
-        alert(`保存成功！已同步 ${savedCount} 篇日记。`);
+        showMessage(`保存成功！已同步 ${savedCount} 篇日记。`, 'success');
       } else {
-        alert(`保存成功！已同步 ${savedCount} 篇日记。`);
+        showMessage(`保存成功！已同步 ${savedCount} 篇日记。`, 'success');
       }
       
     } catch (error) {
       console.error("❌ 批量保存过程中出现错误:", error);
-      alert("保存过程中出现部分错误，请检查网络或控制台详情。");
+      showMessage("保存过程中出现部分错误，请检查网络或控制台详情。", 'error');
     } finally {
       console.groupEnd();
     }
@@ -1024,7 +1054,40 @@ export default function Diary() {
                 data-page={rightPageNum} 
                 style={{ backgroundImage: `url('${rightPageImg}')` }}
               >
-                <div className="diary-text-container">
+                {/* 词云显示区域 - 只在第一页显示，直接显示图片 */}
+                {rightPageNum === 3 && showWordCloudInDiary && wordCloudImageUrl && (
+                  <div style={{
+                    position: 'absolute',
+                    top: '5%',
+                    left: '5%',
+                    right: '5%',
+                    width: '90%',
+                    height: '280px',
+                    zIndex: 10,
+                    pointerEvents: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <img 
+                      src={wordCloudImageUrl} 
+                      alt="词云" 
+                      className="diary-wordcloud-image"
+                      style={{
+                        width: '100%',
+                        height: 'auto',
+                        maxHeight: '280px',
+                        objectFit: 'contain',
+                        display: 'block'
+                      }}
+                      onLoad={() => console.log('词云图片加载成功')}
+                      onError={(e) => console.error('词云图片加载失败:', e)}
+                    />
+                  </div>
+                )}
+                <div className="diary-text-container" style={{
+                  marginTop: rightPageNum === 3 && showWordCloudInDiary ? '300px' : '0'
+                }}>
                   <div 
                     className="diary-text-display"
                     contentEditable
@@ -1053,7 +1116,7 @@ export default function Diary() {
         style={{
           position: 'absolute',
           bottom: '20px',
-          right: '20px',
+          right: '140px',
           width: '100px',
           height: '40px',
           backgroundImage: `url('/img/diary/button.png')`,
@@ -1063,13 +1126,100 @@ export default function Diary() {
           zIndex: 1000,
           opacity: 0.8,
           transition: 'opacity 0.3s ease',
-          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)'
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#FFFFFF',
+          fontFamily: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif',
+          fontSize: '0.9rem',
+          fontWeight: 600
         }}
         onMouseEnter={(e) => e.target.style.opacity = 1}
         onMouseLeave={(e) => e.target.style.opacity = 0.8}
         title="保存日记"
       >
-        保存并文生图
+        <span style={{
+          position: 'relative',
+          zIndex: 1,
+          color: '#FFFFFF',
+          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.6), -1px -1px 2px rgba(0, 0, 0, 0.8)',
+          fontWeight: 700,
+          display: 'block',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap'
+        }}>
+          保存并文生图
+        </span>
+      </div>
+      
+      {/* 添加生成词云按钮 */}
+      <div 
+        className="diary-wordcloud-button"
+        onClick={() => {
+          // 收集所有日记内容
+          const allTexts = pageTextsRef.current;
+          let allDiaryContent = "";
+          
+          for (let i = 1; i <= 6; i++) {
+            const content = allTexts[i];
+            if (content && content.trim() !== "") {
+              allDiaryContent += content + "\n\n";
+            }
+          }
+          
+          if (!allDiaryContent || allDiaryContent.trim() === "") {
+            showMessage('日记内容为空，无法生成词云', 'warning');
+            return;
+          }
+          
+          setWordCloudContent(allDiaryContent.trim());
+          setShowWordCloudPreview(true);
+        }}
+        style={{
+          position: 'absolute',
+          bottom: '20px',
+          right: '20px',
+          width: '100px',
+          height: '40px',
+          backgroundImage: `url('/img/diary/button.png')`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          cursor: 'pointer',
+          zIndex: 1000,
+          opacity: 0.8,
+          transition: 'opacity 0.3s ease, transform 0.3s ease',
+          boxShadow: '0 2px 10px rgba(0, 0, 0, 0.3)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#FFFFFF',
+          fontFamily: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif',
+          fontSize: '0.9rem',
+          fontWeight: 600
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.opacity = 1;
+          e.target.style.transform = 'scale(1.05)';
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.opacity = 0.8;
+          e.target.style.transform = 'scale(1)';
+        }}
+        title="生成词云"
+      >
+        <span style={{
+          position: 'relative',
+          zIndex: 1,
+          color: '#FFFFFF',
+          textShadow: '2px 2px 4px rgba(0, 0, 0, 0.8), 0 0 8px rgba(0, 0, 0, 0.6), -1px -1px 2px rgba(0, 0, 0, 0.8)',
+          fontWeight: 700,
+          display: 'block',
+          pointerEvents: 'none',
+          whiteSpace: 'nowrap'
+        }}>
+          生成词云
+        </span>
       </div>
       
       {/* 文生图界面 - 直接使用ImageGeneration组件，去掉外层模态框 */}
@@ -1086,6 +1236,49 @@ export default function Diary() {
           }
           setShowImageGeneration(false);
         }}
+      />
+      
+      {/* 隐藏的词云生成器，用于生成图片 */}
+      {showWordCloudInDiary && wordCloudContent && !wordCloudImageUrl && (
+        <div style={{ position: 'fixed', left: '-9999px', top: '-9999px', visibility: 'hidden', pointerEvents: 'none' }}>
+          <WordCloud
+            text={wordCloudContent}
+            width={600}
+            height={280}
+            onRendered={(canvas) => {
+              if (canvas) {
+                // 将canvas转换为图片
+                const imageUrl = canvas.toDataURL('image/png');
+                console.log('词云图片已生成，URL长度:', imageUrl.length);
+                setWordCloudImageUrl(imageUrl);
+              } else {
+                console.warn('词云canvas为空');
+              }
+            }}
+          />
+        </div>
+      )}
+      
+      {/* 词云预览弹框 */}
+      <WordCloudPreview
+        isVisible={showWordCloudPreview}
+        diaryContent={wordCloudContent}
+        onClose={() => setShowWordCloudPreview(false)}
+        onConfirm={() => {
+          // 重置图片URL，触发重新生成
+          setWordCloudImageUrl(null);
+          setShowWordCloudInDiary(true);
+          setShowWordCloudPreview(false);
+        }}
+      />
+      
+      {/* 可爱狐狸风格的消息提示 */}
+      <FoxMessage
+        visible={messageState.visible}
+        message={messageState.message}
+        type={messageState.type}
+        duration={3000}
+        onClose={handleMessageClose}
       />
     </div>
   );

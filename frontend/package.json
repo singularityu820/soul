@@ -20,7 +20,8 @@
     "styled-components": "^6.1.19",
     "three": "^0.181.0",
     "turn.js": "^1.0.5",
-    "uuid": "^13.0.0"
+    "uuid": "^13.0.0",
+    "wordcloud": "^1.2.3"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.1.0",

@@ -28,7 +28,7 @@
   background-position: center;
   background-repeat: no-repeat;
   z-index: 0;
-  filter: brightness(0.6); /* 稍微调暗背景以突出卡片 */
+  /* filter: brightness(0.6); */
 }
 
 /* =========================================

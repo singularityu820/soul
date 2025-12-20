@@ -244,7 +244,7 @@ export default function AudioRecordButton({
 
       {responseText && (
         <div className="audio-response">
-          <strong>AI:</strong> {responseText}
+          <strong>星屿:</strong> {responseText}
         </div>
       )}
     </div>

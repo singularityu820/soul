@@ -20,9 +20,9 @@
 
 /* 图片生成模态框 */
 .image-generation-modal {
-  background-color: white;
+  background-color: #FFFEF5;
   border-radius: 16px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1), 0 5px 15px rgba(0, 0, 0, 0.07);
+  box-shadow: 0 15px 35px rgba(212, 165, 116, 0.2), 0 5px 15px rgba(212, 165, 116, 0.1);
   width: 85%;
   max-width: 650px;
   max-height: 85vh;
@@ -30,7 +30,7 @@
   display: flex;
   flex-direction: column;
   animation: slideUp 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  border: 1px solid rgba(255, 255, 255, 0.8);
+  border: 2px solid #D4A574;
   backdrop-filter: blur(10px);
 }
 
@@ -39,8 +39,8 @@
   width: 75%;
   max-width: 600px;
   max-height: 80vh;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.12), 0 8px 16px rgba(0, 0, 0, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 20px 40px rgba(212, 165, 116, 0.25), 0 8px 16px rgba(212, 165, 116, 0.15);
+  border: 2px solid #D4A574;
   backdrop-filter: blur(15px);
 }
 
@@ -62,9 +62,11 @@
   justify-content: space-between;
   align-items: center;
   padding: 24px 28px;
-  border-bottom: 1px solid rgba(240, 240, 245, 0.8);
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  border-bottom: 2px solid #D4A574;
+  background: #FFF8DC;
+  color: #8B4513;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
+  box-shadow: 0 2px 8px rgba(212, 165, 116, 0.2);
 }
 
 .image-generation-header h2 {
@@ -79,7 +81,7 @@
   border: none;
   font-size: 1.8rem;
   cursor: pointer;
-  color: white;
+  color: #8B4513;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -87,11 +89,13 @@
   align-items: center;
   justify-content: center;
   transition: all 0.2s ease;
+  font-weight: bold;
 }
 
 .close-btn:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(212, 165, 116, 0.3);
   transform: scale(1.1);
+  color: #8B4513;
 }
 
 /* 图片生成内容区 */
@@ -99,7 +103,8 @@
   padding: 28px;
   overflow-y: auto;
   flex: 1;
-  background: linear-gradient(to bottom, #ffffff, #f8f9fa);
+  background: #FFFEF5;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
 }
 
 /* 选项容器 */
@@ -111,11 +116,12 @@
 
 /* 日记预览 */
 .diary-preview {
-  background-color: #f8f9fa;
+  background-color: #FFFEF5;
   border-radius: 12px;
   padding: 20px;
-  border-left: 4px solid #667eea;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-left: 4px solid #D4A574;
+  box-shadow: 0 4px 12px rgba(212, 165, 116, 0.15);
+  border: 1px solid #F5DEB3;
 }
 
 .diary-preview h3 {
@@ -165,30 +171,32 @@
 
 .option-group select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.15);
+  border-color: #D4A574;
+  box-shadow: 0 0 0 3px rgba(212, 165, 116, 0.15);
 }
 
 /* 生成按钮 */
 .generate-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
+  background: #FFD700;
+  color: #8B4513;
+  border: 2px solid #D4A574;
   padding: 14px 28px;
-  border-radius: 8px;
+  border-radius: 20px;
   font-size: 1.05rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   align-self: center;
   min-width: 180px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
   letter-spacing: 0.5px;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
 }
 
 .generate-btn:hover:not(:disabled) {
   transform: translateY(-3px);
-  box-shadow: 0 7px 16px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 7px 16px rgba(255, 215, 0, 0.4);
+  background: #FFC107;
 }
 
 .generate-btn:disabled {
@@ -222,12 +230,13 @@
 
 /* 情绪信息 */
 .emotion-info {
-  background-color: #f8f9fa;
+  background-color: #FFFEF5;
   border-radius: 12px;
   padding: 20px;
   text-align: center;
-  border-left: 4px solid #764ba2;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-left: 4px solid #D4A574;
+  box-shadow: 0 4px 12px rgba(212, 165, 116, 0.15);
+  border: 1px solid #F5DEB3;
 }
 
 .emotion-info h3 {
@@ -247,11 +256,12 @@
 
 /* 调整区域 */
 .adjustment-section {
-  background-color: #f8f9fa;
+  background-color: #FFFEF5;
   border-radius: 12px;
   padding: 20px;
-  border-left: 4px solid #28a745;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  border-left: 4px solid #D4A574;
+  box-shadow: 0 4px 12px rgba(212, 165, 116, 0.15);
+  border: 1px solid #F5DEB3;
 }
 
 .adjustment-section h3 {
@@ -287,31 +297,34 @@
 }
 
 .adjustment-btn.selected {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-color: #667eea;
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+  background: #FFD700;
+  color: #8B4513;
+  border-color: #D4A574;
+  box-shadow: 0 4px 8px rgba(255, 215, 0, 0.3);
+  font-weight: 600;
 }
 
 .adjust-apply-btn {
-  background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
-  color: white;
-  border: none;
+  background: #FFD700;
+  color: #8B4513;
+  border: 2px solid #D4A574;
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: 20px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   align-self: center;
   min-width: 150px;
-  box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
   letter-spacing: 0.5px;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
 }
 
 .adjust-apply-btn:hover:not(:disabled) {
   transform: translateY(-3px);
-  box-shadow: 0 7px 16px rgba(40, 167, 69, 0.4);
+  box-shadow: 0 7px 16px rgba(255, 215, 0, 0.4);
+  background: #FFC107;
 }
 
 .adjust-apply-btn:disabled {
@@ -330,23 +343,24 @@
 }
 
 .regenerate-btn {
-  background-color: #6c757d;
-  color: white;
-  border: none;
+  background-color: #FFFEF5;
+  color: #8B4513;
+  border: 2px solid #D4A574;
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: 20px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+  box-shadow: 0 4px 12px rgba(212, 165, 116, 0.2);
   letter-spacing: 0.5px;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
 }
 
 .regenerate-btn:hover:not(:disabled) {
-  background-color: #5a6268;
+  background-color: #FFF8DC;
   transform: translateY(-3px);
-  box-shadow: 0 7px 16px rgba(108, 117, 125, 0.4);
+  box-shadow: 0 7px 16px rgba(212, 165, 116, 0.3);
 }
 
 .regenerate-btn:disabled {
@@ -356,22 +370,24 @@
 }
 
 .save-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
+  background: #FFD700;
+  color: #8B4513;
+  border: 2px solid #D4A574;
   padding: 12px 24px;
-  border-radius: 8px;
+  border-radius: 20px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3);
   letter-spacing: 0.5px;
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
 }
 
 .save-btn:hover {
   transform: translateY(-3px);
-  box-shadow: 0 7px 16px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 7px 16px rgba(255, 215, 0, 0.4);
+  background: #FFC107;
 }
 
 /* 图片生成底部 */
@@ -379,39 +395,31 @@
   display: flex;
   justify-content: flex-end;
   padding: 20px 28px;
-  border-top: 1px solid rgba(240, 240, 245, 0.8);
-  background-color: #f8f9fa;
+  border-top: 2px solid #D4A574;
+  background-color: #FFFEF5;
 }
 
 .cancel-btn {
-  background-color: #6c757d;
-  color: white;
-  border: none;
+  background-color: #FFFEF5;
+  color: #8B4513;
+  border: 2px solid #D4A574;
   padding: 10px 20px;
-  border-radius: 8px;
+  border-radius: 20px;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+  box-shadow: 0 4px 12px rgba(212, 165, 116, 0.2);
+  font-family: '"萌趣甜心体", "Microsoft YaHei", "Heiti SC", sans-serif';
 }
 
 .cancel-btn:hover {
-  background-color: #5a6268;
+  background-color: #FFF8DC;
   transform: translateY(-2px);
+  box-shadow: 0 6px 14px rgba(212, 165, 116, 0.3);
 }
 
-/* 错误消息 */
-.error-message {
-  color: #dc3545;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-  padding: 14px;
-  border-radius: 8px;
-  margin-top: 16px;
-  font-size: 0.9rem;
-  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.15);
-}
+/* 错误消息 - 已移除，改用 FoxMessage 组件 */
 
 /* 生成状态容器 */
 .generating-container {

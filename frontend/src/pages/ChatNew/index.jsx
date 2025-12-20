@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import "./styles/index.css";
 // 导入新的资源图片
-import backgroundImg from "../../assets/newChat/背景图片.jpg";
+import backgroundImg from "../../assets/newChat/background.jpg";
 import leftBottomBoxImg from "../../assets/newChat/左下角框.png";
 import hangupBtnImg from "../../assets/newChat/挂断按键.png";
 import playBtnImg from "../../assets/newChat/播放按键.png";

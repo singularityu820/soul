@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './KawaiiChat.css';
 
 // 引入图片资源
-import bgChat from '../../assets/KawaiiChat/bg_chat.jpg';
+import bgChat from '../../assets/KawaiiChat/background.jpg';
 import bubbleFox from '../../assets/KawaiiChat/bubble_fox.png';
 import bubbleUser from '../../assets/KawaiiChat/bubble_user.png';
 import inputBar from '../../assets/KawaiiChat/input_bar.png';
@@ -17,6 +17,7 @@ const KawaiiChat = () => {
   const [messages, setMessages] = useState([]); 
   const [inputValue, setInputValue] = useState('');
   const [threadId, setThreadId] = useState(null);
+  const [isInChatMode, setIsInChatMode] = useState(false); // 是否进入聊天模式
   
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
@@ -46,7 +47,7 @@ const KawaiiChat = () => {
       wsRef.current = null;
     }
 
-    const ws = new WebSocket(`ws://xbxm.cloud:443/ws/chat?thread_id=${tid}`);
+    const ws = new WebSocket(`wss://xbxm.cloud:443/ws/chat?thread_id=${tid}`);
     
     ws.onopen = () => {
       console.log(`✅ WebSocket 已连接到会话: ${tid}`);
@@ -115,10 +116,12 @@ const KawaiiChat = () => {
             text: m.text
           }));
           
+          // 始终显示初始页面，不自动进入聊天模式
           if (formattedHistory.length === 0) {
             formattedHistory.push({ id: 'init-0', type: 'fox', text: '欢迎回来！我还记得你哦 🦊' });
           }
           setMessages(formattedHistory);
+          setIsInChatMode(false); // 始终从初始页面开始
 
         } else {
           // 如果没有，新建
@@ -160,6 +163,8 @@ const KawaiiChat = () => {
         setThreadId(newId);
         // 清空旧消息，显示新的开场白
         setMessages([{ id: 'new-start', type: 'fox', text: '你好呀，这是一个新的开始' }]);
+        // 重置为初始页面
+        setIsInChatMode(false);
         
         // 重新连接 WebSocket 到新频道
         connectWebSocket(newId);
@@ -170,13 +175,23 @@ const KawaiiChat = () => {
   };
 
   // ==========================================
-  // 发送逻辑
+  // 进入聊天模式
   // ==========================================
-  const handleSend = async () => {
-    if (!inputValue.trim()) return;
+  const enterChatMode = () => {
+    setIsInChatMode(true);
+  };
+
+  // ==========================================
+  // 内部发送消息函数（可复用）
+  // ==========================================
+  const sendMessage = async (textToSend) => {
+    if (!textToSend || !textToSend.trim()) return;
     if (!threadId) return;
 
-    const textToSend = inputValue;
+    // 确保进入聊天模式
+    if (!isInChatMode) {
+      setIsInChatMode(true);
+    }
     
     // 乐观更新 - 添加带有临时标记的用户消息
     const tempId = `temp-${Date.now()}`;
@@ -186,7 +201,6 @@ const KawaiiChat = () => {
       text: textToSend,
       isTemp: true // 添加临时标记
     }]);
-    setInputValue('');
 
     try {
       // 使用流式接口发送消息
@@ -357,8 +371,51 @@ const KawaiiChat = () => {
     }
   };
 
+  // ==========================================
+  // 发送按钮处理
+  // ==========================================
+  const handleSend = async () => {
+    if (!inputValue.trim()) return;
+    const textToSend = inputValue;
+    setInputValue('');
+    await sendMessage(textToSend);
+  };
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') handleSend();
+  };
+
+  // ==========================================
+  // 处理功能按钮点击
+  // ==========================================
+  const handleSkillClick = async (skill) => {
+    const skillPrompts = {
+      'image': '帮我生成一张图片',
+      'write': '帮我写一篇文章',
+      'video': '帮我生成一个视频',
+      'translate': '帮我翻译',
+      'code': '帮我写代码',
+      'research': '帮我深入研究',
+    };
+    const prompt = skillPrompts[skill] || '';
+    if (prompt && threadId) {
+      // 先进入聊天模式
+      setIsInChatMode(true);
+      // 然后发送消息
+      await sendMessage(prompt);
+    }
+  };
+
+  // 获取当前时间问候语
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 6) return '凌晨好';
+    if (hour < 9) return '早上好';
+    if (hour < 12) return '上午好';
+    if (hour < 14) return '中午好';
+    if (hour < 18) return '下午好';
+    if (hour < 22) return '晚上好';
+    return '夜深了';
   };
 
   return (
@@ -376,42 +433,98 @@ const KawaiiChat = () => {
       </header>
 
       <main className="kawaii-main">
-        {/* 已删除 center-decoration 区域 */}
-        
-        <div className="message-list">
-          {messages.map((msg) => (
-            <div key={msg.id} className={`message-row ${msg.type === 'user' ? 'row-right' : 'row-left'}`} style={{alignItems: 'flex-start'}}>
-              {msg.type === 'fox' && <div className="chat-avatar"><img src={foxhead} alt="狐狸头像" style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%'}} /></div>}
-              <div 
-                className="bubble-container"
-                style={{ 
-                  backgroundImage: `url(${msg.type === 'user' ? bubbleUser : bubbleFox})`,
-                  color: msg.type === 'user' ? '#8b5e3c' : '#a67c52' 
-                }}
-              >
-                <p className="message-text">{msg.text}{msg.isTyping && <span className="typing-indicator">...</span>}</p>
+        {!isInChatMode ? (
+          /* 初始欢迎页面 */
+          <div className="welcome-screen">
+            {/* 顶部欢迎面板 */}
+            <div className="welcome-panel">
+              <div className="welcome-illustration">
+                <img src={foxhead} alt="狐狸" className="welcome-fox-img" />
+              </div>
+              <div className="welcome-greeting">
+                {getGreeting()}, 我是消息狐 🦊
               </div>
             </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
+
+            {/* 功能按钮区域 */}
+            {/* <div className="welcome-skills">
+              <div className="skill-button" onClick={() => handleSkillClick('image')}>
+                <div className="skill-icon">🖼️</div>
+                <div className="skill-label">图像生成</div>
+              </div>
+              <div className="skill-button" onClick={() => handleSkillClick('write')}>
+                <div className="skill-icon">✍️</div>
+                <div className="skill-label">帮我写作</div>
+              </div>
+              <div className="skill-button" onClick={() => handleSkillClick('video')}>
+                <div className="skill-icon">🎬</div>
+                <div className="skill-label">视频生成</div>
+              </div>
+              <div className="skill-button" onClick={() => handleSkillClick('translate')}>
+                <div className="skill-icon">💬</div>
+                <div className="skill-label">翻译</div>
+              </div>
+              <div className="skill-button" onClick={() => handleSkillClick('code')}>
+                <div className="skill-icon">💻</div>
+                <div className="skill-label">编程</div>
+              </div>
+              <div className="skill-button" onClick={() => handleSkillClick('research')}>
+                <div className="skill-icon">🔍</div>
+                <div className="skill-label">深入研究</div>
+              </div>
+              <div className="skill-button" onClick={() => {}}>
+                <div className="skill-icon">⋯</div>
+                <div className="skill-label">更多</div>
+              </div>
+            </div> */}
+
+            {/* 进入聊天按钮 */}
+            <div className="enter-chat-button-wrapper">
+              <button className="enter-chat-button" onClick={enterChatMode}>
+                <img src={foxhead} alt="狐狸" className="enter-chat-fox" />
+                <span className="enter-chat-text">开始聊天 🦊</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* 聊天消息列表 */
+          <div className="message-list">
+            {messages.map((msg) => (
+              <div key={msg.id} className={`message-row ${msg.type === 'user' ? 'row-right' : 'row-left'}`} style={{alignItems: 'flex-start'}}>
+                {msg.type === 'fox' && <div className="chat-avatar"><img src={foxhead} alt="狐狸头像" style={{width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%'}} /></div>}
+                <div 
+                  className="bubble-container"
+                  style={{ 
+                    backgroundImage: `url(${msg.type === 'user' ? bubbleUser : bubbleFox})`,
+                    color: msg.type === 'user' ? '#8b5e3c' : '#a67c52' 
+                  }}
+                >
+                  <p className="message-text">{msg.text}{msg.isTyping && <span className="typing-indicator">...</span>}</p>
+                </div>
+              </div>
+            ))}
+            <div ref={messagesEndRef} />
+          </div>
+        )}
       </main>
 
-      <footer className="kawaii-footer">
-        <div className="input-wrapper" style={{ backgroundImage: `url(${inputBar})` }}>
-          <input 
-            type="text" 
-            placeholder="快和我说说话..." 
-            className="custom-input"
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyPress={handleKeyPress}
-          />
-        </div>
-        <div className="send-btn-wrapper" onClick={handleSend}>
-            <img src={btnSend} alt="Send" />
-        </div>
-      </footer>
+      {isInChatMode && (
+        <footer className="kawaii-footer">
+          <div className="input-wrapper" style={{ backgroundImage: `url(${inputBar})` }}>
+            <input 
+              type="text" 
+              placeholder="快和我说说话..." 
+              className="custom-input"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyPress={handleKeyPress}
+            />
+          </div>
+          <div className="send-btn-wrapper" onClick={handleSend}>
+              <img src={btnSend} alt="Send" />
+          </div>
+        </footer>
+      )}
     </div>
   );
 };
