@@ -1,68 +1,29 @@
 # Soul Emotion Agent
 
-Multimodal real-time emotion companion that fuses simulated EEG signals and facial expression analysis to animate a virtual sprite and drive proactive conversational responses. The project is split into a FastAPI backend that orchestrates the emotion pipeline and a React front-end dashboard for visualization and interaction.
+多模态情感伙伴：融合模拟 EEG、面部情绪和 LLM/TTS 流水线，驱动虚拟角色的表情、语音和对话。后端使用 FastAPI，前端使用 React/Vite 仪表盘与聊天界面。
 
-## Features
+## 核心特性
 
-- **EEG simulator & classifier**: Emits synthetic BCI frames that follow the documented POST payload (serial/page timestamps, sample_size, point_timestamp/point_data, error_data) and derives spectral band features for the placeholder classifier.
-- **Face emotion tool**: Accepts detections through an API endpoint and falls back to a stochastic simulator until a real YOLO-style model is connected.
-- **Emotion fusion**: Combines EEG and face channels into a single affective state with weighted confidence tracking.
-- **Messenger-style UI**: React front-end now mimics a full chat companion with thread list, rich message bubbles, call/screen-share entry points, and emotion-aware context.
-- **Avatar orchestration**: Translates emotion outputs into sprite expressions, poses, and color themes.
-- **Modular memory stack**: Working/episodic/semantic/perceptual memories routed through a unified manager with vector search, graph relations, and RAG-ready document ingestion.
-- **LLM/TTS provider orchestration**: Auto-detects OpenAI, ModelScope, Zhipu AI, vLLM, or Ollama backends, and now streams GPT-SoVITs TTS requests chunk-by-chunk on punctuation/voice markers (replacing `0.0.0.0` URLs with the configured public base) while falling back to sandbox stubs when credentials are missing.
-- **🆕 Qwen Omni Realtime**: 集成阿里云千问全模态实时大模型，实现 <500ms 超低延迟的实时语音对话，支持语音输入直接生成语音+文本输出，替代传统 ASR→LLM→TTS 三段式流程。保留工具调用能力，支持 4 种音色和服务端 VAD。
-- **WebSocket voice streaming**: Low-latency voice loop built on `/ws/voice-stream`, now powered by Qwen-Omni-Realtime for near-instant audio-to-audio responses with automatic speech detection.
-- **ASR integration** (legacy fallback): Automatic speech recognition (Whisper API, Azure Speech, DashScope Qwen ASR, ModelScope) as fallback when not using Qwen Omni Realtime.
-- **WebSocket streaming**: Pushes emotion, avatar, and agent events to the UI in real time.
-- **Front-end dashboard**: React UI showing EEG waveforms, channel contributions, agent log, and manual user memory inputs.
+- EEG 与人脸情绪融合，带置信度权重，可直接使用内置模拟器。
+- Qwen Omni Realtime 低延迟语音双工 WebSocket（`/ws/voice-stream`），内置 VAD 与工具调用。
+- 模块化记忆（工作/情景/语义/感知），可接入向量检索与 RAG。
+- LLM/TTS/ASR 自动探测，缺省回落沙盒；头像/情绪状态实时推送到前端。
+- 情绪小游戏与陪伴玩法，基于当前情绪/记忆动态驱动头像与交互。
+- 情绪日记：支持创建/更新/搜索/标签统计，前端有预览与时间线入口。
 
-## Project Structure
+## 快速上手
 
-```
-backend/
-  app/
-    services/
-      agent/         # LLM, TTS, agent orchestration, memory adapter
-      emotion/       # EEG simulator, face tool, fusion pipeline, avatar
-      chat/          # Chat service and websocket emitters
-      realtime/      # WebSocket voice streaming utilities
-    memory/          # Modular memory system (manager, types, storage, RAG)
-    config.py        # Configuration dataclasses
-    main.py          # FastAPI entrypoint and routes
-    schemas.py       # Shared Pydantic schemas
-  pyproject.toml     # Python project metadata
-  requirements.txt   # Backend dependencies
-frontend/
-  src/               # React components
-  package.json       # Front-end dependencies and scripts
-``` 
-
-## Getting Started
-
-### Backend (FastAPI)
+Backend
 
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate
+.venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000 --app-dir backend
 ```
 
-The backend exposes:
-- `GET /health` – quick heartbeat with the latest inferred emotion.
-- `POST /ingest/face` – submit face emotion detections (label, confidence, intensity).
-- `POST /agent/user-message` – store user inputs for memory and future RAG.
-- `GET /memory/snapshot` – inspect recent memory events.
-- `WS /ws/pipeline` – subscribe to fused emotion updates, avatar states, and agent messages.
-- `GET /chat/threads` – list chat threads; `POST` to create a new one.
-- `GET /chat/threads/{id}/messages` – fetch recent messages; `POST` to append a user message and trigger the agent response.
-- `WS /ws/chat?thread_id=...` – live stream chat events (history + incremental updates).
-- `POST /audio/conversation` – upload audio to trigger the ASR → LLM → TTS pipeline and receive synthesized speech.
-- `WS /ws/voice-stream` – **Qwen Omni Realtime** powered full-duplex WebSocket for ultra-low latency voice conversation (<500ms). Supports automatic VAD, 4 voice options, and tool calling integration. 详见 [Qwen Omni 快速开始](docs/QWEN_OMNI_QUICKSTART.md).
-
-### 3. 启动前端 (React + Vite)
+Frontend
 
 ```bash
 cd frontend
@@ -70,51 +31,30 @@ npm install
 npm run dev
 ```
 
-The dev server proxies API and WebSocket calls to `http://localhost:8000`. Open the printed Vite URL to see the dashboard.
+Vite 开发服务器默认反向代理到 `http://localhost:8000`。
 
-#### Voice stream endpoint override
+## 主要接口
 
-When you deploy the frontend behind a reverse proxy (non-`localhost:8000`), set `VITE_VOICE_STREAM_WS_URL` in `frontend/.env` to the absolute WebSocket endpoint (for example `wss://api.example.com/ws/voice-stream`). The `useVoiceStream` hook will try to infer sensible defaults—`ws://localhost:8000` during Vite dev ports (`5173`, `4173`, `3000`, `8080`), otherwise the current origin—but the explicit env var removes any ambiguity. You can also provide `window.__SOUL_CONFIG__.voiceStreamWsUrl` when embedding the bundle in another host page.
+- `GET /health`：心跳与最新情绪。
+- `POST /ingest/face`：提交人脸情绪检测。
+- `POST /agent/user-message`：写入用户消息供记忆/RAG。
+- `GET /memory/snapshot`：查看近期记忆事件。
+- `WS /ws/pipeline`：情绪融合、头像、智能体事件流。
+- `GET/POST /chat/threads`，`/chat/threads/{id}/messages`：会话与消息。
+- `WS /ws/chat?thread_id=...`：聊天实时流。
+- `POST /audio/conversation`：ASR → LLM → TTS 管线。
+- `WS /ws/voice-stream`：Qwen Omni 实时语音（<500ms 音频到音频）。
+- `POST /api/diary/`：创建情绪日记。
+- `GET /api/diary/{diary_id}`：读取单篇日记；`PUT` 更新，`DELETE` 删除。
+- `GET /api/diary/user/{user_id}`：分页日记列表；`/latest` 最新一篇；`/count` 数量统计。
+- `GET /api/diary/user/{user_id}/search?query=...`：全文搜索日记。
+- `GET /api/diary/user/{user_id}/emotion-tags`：情绪标签分布；`/previews` 最新若干篇预览。
 
-## Extending with Real Signals
+## 环境变量
 
-- **EEG**: Replace `EEGEmotionClassifier` logic with calls into your actual MLP tool/API. The `EEGStreamTool` already exposes a single integration point (`classify`).
-- **Face recognition**: Feed results from a YOLO or other video pipeline to `/ingest/face` (or wire the detector directly into `FaceEmotionTool`).
-- **LLM-driven agent**: The `LLMService` auto-picks a provider via env/endpoint probing; export `LLM_PROVIDER=openai|modelscope|zhipu|vllm|ollama` to override or supply the corresponding API keys/endpoints. Set `SOVITS_ENDPOINT` (plus optional `SOVITS_PUBLIC_BASE`, `SOVITS_APP_KEY`, `SOVITS_DOWNLOAD_URL`) so chunked GPT-SoVITs calls can stream audio as soon as punctuation/voice markers land in the LLM output.
-- **Avatar rendering**: The front-end `AvatarCanvas` can be swapped with a richer WebGL canvas or a game engine stream that listens to the same WebSocket.
-- **WebSocket voice streaming**: Use the voice toggle in the chat UI to open `/ws/voice-stream`. Microphone audio is chunked to 16kHz PCM, streamed via WebSocket, and the backend responds with transcripts, streaming LLM chunks, and TTS segment URLs. No STUN/TURN setup is required.
-- **ASR (Speech Recognition)**: Set `ASR_PROVIDER=openai|azure|dashscope|modelscope` and corresponding API keys (`OPENAI_API_KEY` for Whisper, `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION` for Azure, `DASHSCOPE_API_KEY` for Qwen ASR). User voice is automatically transcribed and fed into the LLM conversation. Falls back to sandbox mode if no ASR provider is configured.
+- LLM：`OPENAI_API_KEY`、`MODELSCOPE_API_KEY`、`ZHIPUAI_API_KEY`、`VLLM_ENDPOINT`、`OLLAMA_ENDPOINT` 或 `LLM_PROVIDER`。
+- TTS：`AZURE_TTS_KEY`、`EDGE_TTS_KEY`、AWS 凭据、`COQUI_TTS_ENDPOINT`、`OLLAMA_TTS_ENDPOINT`、`SOVITS_ENDPOINT` 或 `TTS_PROVIDER`。
+- ASR（回退）：`OPENAI_API_KEY`、`AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION`、`DASHSCOPE_API_KEY`、`MODELSCOPE_API_KEY` 或 `ASR_PROVIDER`。
+- 语音流地址覆写：`frontend/.env` 中设置 `VITE_VOICE_STREAM_WS_URL`。
+- 语音情绪回退映射 EEG：`SPEECH_EMOTION_FALLBACK=1`（可选 `DASHSCOPE_API_KEY`）。
 
-- **语音 -> EEG 显示（回退）**: 当部署环境无法使用真实 EEG 或摄像头时，可开启语音情绪回退以将语音情绪结果映射为一个 `eeg` 通道，从而在前端以脑波/EEG 的形式展示情绪。
-  - 启用方式：设置环境变量 `SPEECH_EMOTION_FALLBACK=1`。
-  - 可选：若希望使用通义千问（DashScope/Qwen）实现更准确的情绪检测，请提供 `DASHSCOPE_API_KEY` 并安装 `dashscope` SDK；系统会在音频 flush（句末静音）时把音频发送给 DashScope，并把检测到的情绪标签注入到情绪融合流程中。
-  - 配置与验证说明见：`docs/SPEECH_EEG_FALLBACK.md`。
-- Set `TTS_PROVIDER` (azure|edge|polly|coqui|ollama|sovits) or rely on auto detection (`AZURE_TTS_KEY`, `EDGE_TTS_KEY`, AWS credentials, or responsive Ollama endpoint).
-
-## Next Steps
-
-1. Swap simulated data sources with actual EEG/vision pipelines via the provided tool hooks.
-2. Plug an LLM backend into `ConversationalAgent` and expand the memory store to a persistent vector DB.
-3. Enhance the UI with 3D sprite animation and advanced analytics (timeline, emotion journaling).
-4. Add automated tests and CI workflows as the logic stabilizes.
-
-## Configuration Guides
-
-- **🆕 [Qwen Omni Realtime 快速开始](docs/QWEN_OMNI_QUICKSTART.md)** - 千问全模态实时大模型集成指南（推荐）
-- **🆕 [Qwen Omni Realtime 详细集成](docs/QWEN_OMNI_REALTIME_INTEGRATION.md)** - 完整的技术文档和API参考
-- **[LLM Configuration](docs/LLM_CONFIGURATION.md)** - How to configure LLM providers (OpenAI, ModelScope, Zhipu, vLLM, Ollama) and troubleshoot connection issues
-- **[WebSocket Voice Stream](docs/VOICE_STREAM_GUIDE.md)** - Legacy streaming voice pipeline guide (replaced by Qwen Omni)
-- **[WebRTC Voice Calling (legacy)](docs/WEBRTC_GUIDE.md)** - Archived notes on the retired aiortc-based system
-- **[DashScope ASR Integration](docs/DASHSCOPE_ASR.md)** - Configure Alibaba Cloud's Qwen ASR service (legacy fallback)
-
-### LLM/TTS/ASR Auto-detection Rules
-
-1. Respect explicit `LLM_PROVIDER`/`TTS_PROVIDER`/`ASR_PROVIDER` overrides when present.
-2. Otherwise use `LLMServiceConfig`/`TTSServiceConfig.preferred_provider` if supplied in code.
-3. Probe well-known credentials/endpoints:
-  - LLM: `OPENAI_API_KEY`, `MODELSCOPE_API_KEY`, `ZHIPUAI_API_KEY`, `VLLM_ENDPOINT`, `OLLAMA_ENDPOINT`.
-  - TTS: `AZURE_TTS_KEY`, `EDGE_TTS_KEY`, `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, `COQUI_TTS_ENDPOINT`, `OLLAMA_TTS_ENDPOINT`, `SOVITS_ENDPOINT`.
-  - ASR: `OPENAI_API_KEY` (Whisper), `AZURE_SPEECH_KEY` + `AZURE_SPEECH_REGION`, `DASHSCOPE_API_KEY` (Qwen ASR), `MODELSCOPE_API_KEY`.
-4. When nothing matches, fall back to sandbox implementations that return placeholder text/audio references (no external calls).
-
-Startup logs show the detected providers; adjust env vars to switch at runtime.
